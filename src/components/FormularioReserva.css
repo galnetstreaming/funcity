@@ -1,0 +1,417 @@
+/* 
+ * Estilos Personalizados para Formulario de Reservas Fun City
+ * Archivo: FormularioReserva.css
+ */
+
+/* ========================================
+   CALENDARIO Y SELECTOR DE FECHA
+======================================== */
+
+/* Mejorar el input de fecha nativo */
+input[type="date"] {
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.75rem;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 0.5rem;
+  filter: opacity(0.7);
+  transition: filter 0.3s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: opacity(1);
+}
+
+/* ========================================
+   BOTONES DE HORARIO
+======================================== */
+
+.btn-horario {
+  transition: all 0.3s ease;
+  font-weight: 500;
+  border-width: 2px;
+}
+
+.btn-horario:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.btn-horario.active {
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+/* ========================================
+   CARDS DE SECCIONES
+======================================== */
+
+.card {
+  transition: all 0.3s ease;
+  border-radius: 12px;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+  padding: 1rem 1.5rem;
+  font-weight: 600;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* ========================================
+   BADGES Y ETIQUETAS
+======================================== */
+
+.badge {
+  padding: 0.5rem 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Animación para badges dinámicos */
+.badge-animated {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ========================================
+   INPUTS Y FORM CONTROLS
+======================================== */
+
+.form-control:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+}
+
+.form-control.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.15);
+}
+
+.form-label {
+  margin-bottom: 0.75rem;
+  color: #495057;
+}
+
+.form-text {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* ========================================
+   SELECTOR DE CANTIDAD
+======================================== */
+
+input[type="number"] {
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Ocultar flechas del input number en algunos navegadores */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  height: 50px;
+}
+
+/* ========================================
+   BOTONES DE SUGERENCIAS RÁPIDAS
+======================================== */
+
+.btn-group .btn {
+  min-width: 50px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-group .btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-group .btn.active {
+  transform: scale(1.1);
+}
+
+/* ========================================
+   RESUMEN DE RESERVA
+======================================== */
+
+.alert-success hr {
+  opacity: 0.3;
+  margin: 0.75rem 0;
+}
+
+.alert-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+/* ========================================
+   ALERTAS Y NOTIFICACIONES
+======================================== */
+
+.alert {
+  border-radius: 10px;
+  border-left-width: 5px;
+}
+
+.alert-info {
+  background-color: #e7f3ff;
+  border-left-color: #0dcaf0;
+}
+
+.alert-warning {
+  background-color: #fff8e1;
+  border-left-color: #ffc107;
+}
+
+.alert-success {
+  background-color: #e8f5e9;
+  border-left-color: #198754;
+}
+
+.alert-light {
+  background-color: #f8f9fa;
+  border-left-color: #dee2e6;
+}
+
+/* ========================================
+   BOTONES PRINCIPALES
+======================================== */
+
+.btn-lg {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  border: none;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0a58ca 0%, #084298 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(13, 110, 253, 0.3);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+  border: none;
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #146c43 0%, #0f5132 100%);
+}
+
+.btn-outline-success:hover {
+  background-color: #198754;
+  border-color: #198754;
+  transform: translateY(-1px);
+}
+
+/* ========================================
+   SEPARADORES Y ESPACIADO
+======================================== */
+
+.gap-2 {
+  gap: 0.5rem !important;
+}
+
+.gap-3 {
+  gap: 1rem !important;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+======================================== */
+
+@media (max-width: 768px) {
+  .card-header h5 {
+    font-size: 1.1rem;
+  }
+  
+  .btn-lg {
+    padding: 0.5rem 1.5rem;
+    font-size: 1rem;
+  }
+  
+  .btn-group {
+    flex-wrap: wrap;
+  }
+  
+  .btn-group .btn {
+    flex: 1 0 30%;
+    margin: 0.25rem;
+  }
+  
+  input[type="date"],
+  input[type="number"] {
+    font-size: 1rem;
+  }
+}
+
+/* ========================================
+   ANIMACIONES
+======================================== */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card {
+  animation: slideIn 0.4s ease-out;
+}
+
+.card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.card:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+/* ========================================
+   EFECTOS HOVER
+======================================== */
+
+.form-control:hover:not(:disabled) {
+  border-color: #86b7fe;
+}
+
+.btn:not(:disabled) {
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   ICONOS Y EMOJIS
+======================================== */
+
+.fs-4 {
+  font-size: 1.5rem !important;
+}
+
+.fs-5 {
+  font-size: 1.25rem !important;
+}
+
+.fs-6 {
+  font-size: 1rem !important;
+}
+
+/* ========================================
+   MEJORAS DE ACCESIBILIDAD
+======================================== */
+
+/* Mejorar contraste para lectores de pantalla */
+.text-muted {
+  color: #6c757d !important;
+}
+
+/* Focus visible para teclado */
+*:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+/* ========================================
+   UTILIDADES PERSONALIZADAS
+======================================== */
+
+.border-primary {
+  border-color: #0d6efd !important;
+  border-width: 2px !important;
+}
+
+.border-success {
+  border-color: #198754 !important;
+  border-width: 2px !important;
+}
+
+.border-warning {
+  border-color: #ffc107 !important;
+  border-width: 2px !important;
+}
+
+.border-info {
+  border-color: #0dcaf0 !important;
+  border-width: 2px !important;
+}
+
+.bg-opacity-10 {
+  opacity: 0.1;
+}
+
+/* ========================================
+   SCROLL SUAVE
+======================================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ========================================
+   PRINT STYLES
+======================================== */
+
+@media print {
+  .btn,
+  .alert-info,
+  .alert-light {
+    display: none !important;
+  }
+  
+  .card {
+    page-break-inside: avoid;
+  }
+}
