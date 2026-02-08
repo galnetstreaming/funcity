@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Container, Card, Alert, Spinner } from 'react-bootstrap';
 import FormularioReserva from './components/FormularioReserva';
 import HistorialReservas from './components/HistorialReservas';
-
-import { crearReserva } from './services/api';
+import ListaReservas from './components/ListaReservas';
+import CalendarioDisponibilidad from './components/CalendarioDisponibilidad';
+import api from './services/api';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
-
+import NavBarMain from './layout/NavBarMain';
 
 
 function App() {
@@ -19,96 +20,89 @@ function App() {
       setCargando(true);
       setMensaje({ tipo: '', texto: '' });
 
-      const respuesta = await crearReserva(datosReserva);
-      
+      // Validar datos antes de enviar
+      const validacion = api.validarDatosReserva(datosReserva);
+      if (!validacion.valido) {
+        throw new Error(validacion.errores.join('\n'));
+      }
+
+      // Usar la función crearReserva de la API
+      const respuesta = await api.crearReserva(datosReserva);
+
       // Agregar la reserva al historial local
       const nuevaReserva = {
-        id: respuesta.bloqueo_id,
-        bloqueo_id: respuesta.bloqueo_id,
-        service_pase: respuesta.service_pase,
-        personas_bloqueadas: respuesta.personas_bloqueadas,
-        inicio: respuesta.inicio,
+        id: respuesta.bloqueo_id || respuesta.id,
+        bloqueo_id: respuesta.bloqueo_id || respuesta.id,
+        service_pase: respuesta.service_pase || respuesta.service_id,
+        personas_bloqueadas: respuesta.personas_bloqueadas || respuesta.personas,
+        inicio: respuesta.inicio || `${datosReserva.fecha} ${datosReserva.hora_inicio}:00`,
         fecha_creacion: new Date().toISOString(),
         ...datosReserva
       };
-      
+
       setHistorialReservas(prev => [nuevaReserva, ...prev]);
 
-      setMensaje({ 
-        tipo: 'success', 
-        texto: `🎉 ¡Reserva creada exitosamente! 
-                | ID de Bloqueo: ${respuesta.bloqueo_id} 
-                | Servicio: ${respuesta.service_pase} 
-                | Personas: ${respuesta.personas_bloqueadas} 
-                | Inicio: ${respuesta.inicio}` 
+      setMensaje({
+        tipo: 'success',
+        texto: `🎉 ¡Reserva creada exitosamente!
+                ID: ${respuesta.bloqueo_id || respuesta.id}
+                Servicio: ${respuesta.service_pase || respuesta.service_id}
+                Personas: ${respuesta.personas_bloqueadas || respuesta.personas}
+                Fecha: ${datosReserva.fecha} ${datosReserva.hora_inicio}`
       });
 
       // Limpiar mensaje después de 10 segundos
       setTimeout(() => {
         setMensaje({ tipo: '', texto: '' });
       }, 10000);
-      
+
     } catch (error) {
-      // Manejo específico de diferentes tipos de errores
       let tipoAlerta = 'danger';
       let textoError = '';
 
-      // Detectar slot ocupado
-      if (error.message && (error.message.includes('ocupado') || error.message.includes('ya está reservado'))) {
+      if (error.message && (
+        error.message.includes('ocupado') ||
+        error.message.includes('ya está reservado') ||
+        error.message.includes('slot_ocupado')
+      )) {
         tipoAlerta = 'warning';
-        textoError = `⚠️ Este horario ya está reservado.
-                      
-                      Por favor, selecciona otro horario disponible para la misma fecha.
-                      
-                      💡 Sugerencia: Usa el Calendario de Disponibilidad para ver horarios libres.`;
+        textoError = `⚠️ Este horario ya está reservado.\n\nPor favor, selecciona otro horario disponible.\n\n💡 Usa el Calendario de Disponibilidad para ver horarios libres.`;
       }
-      // Detectar horario no válido
       else if (error.message && error.message.includes('horario') && error.message.includes('válido')) {
         tipoAlerta = 'danger';
-        textoError = `❌ Horario no válido.
-                      
-                      ${error.message}
-                      
-                      Por favor, usa solo los horarios mostrados en el formulario.`;
+        textoError = `❌ Horario no válido.\n\n${error.message}\n\nPor favor, usa solo los horarios mostrados en el formulario.`;
       }
-      // Detectar cantidad inválida
-      else if (error.message && error.message.includes('cantidad')) {
+      else if (error.message && error.message.includes('cantidad') || error.message.includes('personas')) {
         tipoAlerta = 'danger';
-        textoError = `❌ Cantidad de personas inválida.
-                      
-                      Debe estar entre 1 y 40 personas.`;
+        textoError = `❌ Cantidad de personas inválida.\n\nDebe estar entre 1 y 40 personas.`;
       }
-      // Detectar capacidad excedida
-      else if (error.message && error.message.includes('capacidad')) {
+      else if (error.message && error.message.includes('capacidad') || error.message.includes('excede')) {
         tipoAlerta = 'warning';
-        textoError = `⚠️ Capacidad excedida.
-                      
-                      La cantidad de personas excede la capacidad disponible para este servicio.
-                      
-                      Por favor, reduce la cantidad o contacta para consultar opciones.`;
+        textoError = `⚠️ Capacidad excedida.\n\nLa cantidad de personas excede la capacidad disponible.\n\nPor favor, reduce la cantidad.`;
       }
-      // Error genérico - Usar el mensaje real de la API
+      else if (error.message && error.message.includes('API') || error.message.includes('api_key')) {
+        tipoAlerta = 'danger';
+        textoError = `🔑 Error de autenticación.\n\nLa API key es inválida o ha expirado.`;
+      }
       else {
-        const mensajeError = error.message || obtenerMensajeError(error);
-        textoError = `❌ ${mensajeError}`;
+        textoError = `❌ Error: ${error.message || 'Error desconocido'}`;
       }
 
-      setMensaje({ 
-        tipo: tipoAlerta, 
+      setMensaje({
+        tipo: tipoAlerta,
         texto: textoError
       });
 
-      // Log para debugging
-      console.error('Error detallado:', error);
+      console.error('Error creando reserva:', error);
     } finally {
       setCargando(false);
     }
   };
 
   return (
-    <div className="bg-light min-vh-100 py-4">
+    <NavBarMain>
+
       <Container>
-   
         {/* Header */}
         <div className="text-center mb-4">
           <h1 className="display-4 text-primary mb-2">🎉 Fun City</h1>
@@ -117,9 +111,9 @@ function App() {
 
         {/* Mensajes de feedback */}
         {mensaje.texto && (
-          <Alert 
-            variant={mensaje.tipo} 
-            dismissible 
+          <Alert
+            variant={mensaje.tipo}
+            dismissible
             onClose={() => setMensaje({ tipo: '', texto: '' })}
             className="shadow-sm"
           >
@@ -143,7 +137,7 @@ function App() {
             <h4 className="mb-0">➕ Nueva Reserva de Cumpleaños</h4>
           </Card.Header>
           <Card.Body>
-            <FormularioReserva 
+            <FormularioReserva
               onGuardar={handleGuardarReserva}
               deshabilitado={cargando}
             />
@@ -152,14 +146,14 @@ function App() {
 
         {/* Historial de reservas creadas en esta sesión */}
         {historialReservas.length > 0 && (
-          <Card className="shadow-sm">
+          <Card className="shadow-sm mb-4">
             <Card.Header className="bg-success text-white">
               <h4 className="mb-0">📋 Historial de Reservas (Sesión Actual)</h4>
             </Card.Header>
             <Card.Body>
               <Alert variant="info" className="mb-3">
                 <small>
-                  <strong>ℹ️ Nota:</strong> Este historial muestra solo las reservas creadas en esta sesión. 
+                  <strong>ℹ️ Nota:</strong> Este historial muestra solo las reservas creadas en esta sesión.
                   Para ver todas las reservas, accede al panel de Bookly en WordPress.
                 </small>
               </Alert>
@@ -168,12 +162,31 @@ function App() {
           </Card>
         )}
 
+        {/* Calendario de Disponibilidad */}
+        <CalendarioDisponibilidad />
+
+        {/* Lista de Reservas (puedes activarlo cuando tengas datos reales) */}
+        {/* 
+        <Card className="shadow-sm mb-4">
+          <Card.Header className="bg-warning text-dark">
+            <h4 className="mb-0">📋 Lista de Reservas</h4>
+          </Card.Header>
+          <Card.Body>
+            <ListaReservas 
+              reservas={[]} // Aquí pasarías las reservas reales
+              onEditar={() => console.log('Editar reserva')}
+              onEliminar={() => console.log('Eliminar reserva')}
+            />
+          </Card.Body>
+        </Card>
+        */}
+
         {/* Footer */}
         <div className="text-center mt-4 text-muted">
           <small>Fun City - Sistema de Reservas v2.0</small>
         </div>
       </Container>
-    </div>
+    </NavBarMain >
   );
 }
 

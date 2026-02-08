@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Form, Button, Row, Col, Alert, Card, Badge, ButtonGroup } from 'react-bootstrap';
+import NavBarMain from '../layout/NavBarMain';
 
 const FormularioReserva = ({ onGuardar, deshabilitado }) => {
   const [formData, setFormData] = useState({
@@ -165,6 +166,7 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
   ];
 
   return (
+ 
     <Form onSubmit={handleSubmit}>
       {/* Información de horarios */}
       <Alert variant="info" className="mb-4">
@@ -506,6 +508,7 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
         </small>
       </Alert>
     </Form>
+  
   );
 };
 

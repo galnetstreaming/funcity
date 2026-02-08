@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, Alert, Button, Badge, ButtonGroup, Spinner, Row, Col, ProgressBar } from 'react-bootstrap';
 import { 
-  
-  consultarDisponibilidadRango
-
+  consultarDisponibilidadRango,
+  obtenerCumpleanosRegistrados
 } from '../services/api';
+
+
 
 const CalendarioDisponibilidad = () => {
   const [vista, setVista] = useState('mes'); // 'dia', 'semana', 'mes'
@@ -14,6 +15,7 @@ const CalendarioDisponibilidad = () => {
   const [disponibilidad, setDisponibilidad] = useState({});
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const [cumpleanosRegistrados, setCumpleanosRegistrados] = useState({});
 
   // Nombres de días y meses
   const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -115,63 +117,204 @@ const CalendarioDisponibilidad = () => {
     setFechaActual(new Date());
   };
 
-  // Consultar disponibilidad según la vista actual
-  const consultarVistaActual = async () => {
-    setConsultando(true);
-    setProgreso({ actual: 0, total: 0 });
-
-    try {
-      let fechasAConsultar = [];
-      
-      if (vista === 'dia') {
-        if (!esPasado(fechaActual)) {
-          fechasAConsultar = [fechaActual];
-        }
-      } else if (vista === 'semana') {
-        fechasAConsultar = obtenerDiasSemana(fechaActual).filter(f => !esPasado(f));
-      } else if (vista === 'mes') {
-        fechasAConsultar = obtenerDiasMes(fechaActual)
-          .filter(d => d.mesActual && !esPasado(d.fecha))
-          .map(d => d.fecha);
-      }
-
-      // Preparar consultas con horarios correspondientes
-      const consultasAHacer = fechasAConsultar.map(fecha => {
-        const { horarios } = obtenerHorariosDisponibles(fecha);
-        return { fecha: formatearFecha(fecha), horarios };
-      });
-
-      setProgreso({ actual: 0, total: consultasAHacer.length });
-
-      // Consultar todas las fechas
-      const resultados = await consultarDisponibilidadRango(
-        consultasAHacer,
-        (actual, total) => setProgreso({ actual, total })
-      );
-
-      // Actualizar estado con resultados
-      const nuevoEstado = {};
-      resultados.forEach(resultado => {
-        nuevoEstado[resultado.fecha] = resultado;
-      });
-
-      setDisponibilidad(prev => ({ ...prev, ...nuevoEstado }));
-      setUltimaActualizacion(new Date());
-
-    } catch (error) {
-      console.error('Error al consultar disponibilidad:', error);
-      alert('Error al consultar disponibilidad. Por favor intenta nuevamente.');
-    } finally {
-      setConsultando(false);
-      setProgreso({ actual: 0, total: 0 });
+  // Cargar cumpleaños registrados
+const cargarCumpleanosRegistrados = async (fechaInicio, fechaFin) => {
+  try {
+    console.log(`📅 Cargando cumpleaños del ${formatearFecha(fechaInicio)} al ${formatearFecha(fechaFin)}`);
+    
+    const data = await obtenerCumpleanosRegistrados(
+      formatearFecha(fechaInicio),
+      formatearFecha(fechaFin)
+    );
+    
+    // Manejar diferentes formatos de respuesta
+    let cumpleanosArray = [];
+    
+    if (data && Array.isArray(data.cumpleanos)) {
+      // Nuevo formato: data.cumpleanos es un array
+      cumpleanosArray = data.cumpleanos;
+    } else if (Array.isArray(data)) {
+      // Formato antiguo: data es directamente un array
+      cumpleanosArray = data;
+    } else if (data && data.data) {
+      // Otro formato posible
+      cumpleanosArray = data.data || [];
     }
+    
+    console.log(`📊 ${cumpleanosArray.length} cumpleaños recibidos`);
+    
+    const cumpleanosPorFecha = {};
+    cumpleanosArray.forEach(cumple => {
+      let fecha = '';
+      
+      // Extraer fecha de diferentes formatos
+      if (cumple.fecha) {
+        // Ya viene como YYYY-MM-DD o YYYY-MM-DD HH:MM:SS
+        fecha = cumple.fecha.split(' ')[0]; // Tomar solo la parte de la fecha
+      } else if (cumple.start_date) {
+        fecha = cumple.start_date.split(' ')[0];
+      } else if (cumple.inicio) {
+        fecha = cumple.inicio.split(' ')[0];
+      }
+      
+      if (fecha) {
+        if (!cumpleanosPorFecha[fecha]) {
+          cumpleanosPorFecha[fecha] = [];
+        }
+        
+        // Asegurar que tenga los campos necesarios
+        const cumpleFormateado = {
+          ...cumple,
+          fecha,
+          hora_inicio: cumple.hora || cumple.hora_inicio || '00:00',
+          nombre_ninio: cumple.nombre_ninio || cumple.nombre || 'Sin nombre',
+          tema: cumple.tema || 'Sin tema',
+          personas: cumple.personas || cumple.number_of_persons || 1
+        };
+        
+        cumpleanosPorFecha[fecha].push(cumpleFormateado);
+      }
+    });
+    
+    setCumpleanosRegistrados(cumpleanosPorFecha);
+    console.log(`✅ Cumpleaños cargados en ${Object.keys(cumpleanosPorFecha).length} fechas`);
+    
+  } catch (error) {
+    console.error('Error cargando cumpleaños:', error);
+    // No mostrar error al usuario, solo dejar el estado vacío
+    setCumpleanosRegistrados({});
+  }
+};
+
+  // Obtener horarios disponibles según el tipo de día
+  const obtenerHorariosDisponibles = (fecha) => {
+    const date = new Date(fecha);
+    const diaSemana = date.getDay();
+    const esFinDeSemana = diaSemana === 0 || diaSemana === 6;
+    
+    const horarios = esFinDeSemana 
+      ? ['10:30', '12:20', '14:10', '16:00']
+      : ['12:30', '14:20', '16:10'];
+
+    return {
+      horarios,
+      esFinDeSemana,
+      tipoDia: esFinDeSemana ? 'fin_de_semana' : 'semana'
+    };
   };
+
+  // Cargar cumpleaños cuando cambie la vista o fecha
+  useEffect(() => {
+    let fechaInicio, fechaFin;
+    
+    if (vista === 'mes') {
+      const primerDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
+      const ultimoDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
+      fechaInicio = primerDia;
+      fechaFin = ultimoDia;
+    } else if (vista === 'semana') {
+      const dias = obtenerDiasSemana(fechaActual);
+      fechaInicio = dias[0];
+      fechaFin = dias[6];
+    } else { // vista 'dia'
+      fechaInicio = fechaActual;
+      fechaFin = fechaActual;
+    }
+    
+    cargarCumpleanosRegistrados(fechaInicio, fechaFin);
+  }, [fechaActual, vista]);
+
+  // Consultar disponibilidad según la vista actual
+const consultarVistaActual = async () => {
+  setConsultando(true);
+  setProgreso({ actual: 0, total: 0 });
+
+  try {
+    let fechasAConsultar = [];
+    
+    if (vista === 'dia') {
+      if (!esPasado(fechaActual)) {
+        fechasAConsultar = [fechaActual];
+      }
+    } else if (vista === 'semana') {
+      fechasAConsultar = obtenerDiasSemana(fechaActual).filter(f => !esPasado(f));
+    } else if (vista === 'mes') {
+      fechasAConsultar = obtenerDiasMes(fechaActual)
+        .filter(d => d.mesActual && !esPasado(d.fecha))
+        .map(d => d.fecha);
+    }
+
+    if (fechasAConsultar.length === 0) {
+      alert('No hay fechas futuras para consultar en este rango.');
+      return;
+    }
+
+    // Preparar consultas con horarios correspondientes
+    const consultasAHacer = fechasAConsultar.map(fecha => {
+      const { horarios } = obtenerHorariosDisponibles(fecha);
+      return { 
+        fecha: formatearFecha(fecha), 
+        horarios: horarios || [] 
+      };
+    }).filter(consulta => consulta.horarios.length > 0);
+
+    if (consultasAHacer.length === 0) {
+      alert('No hay horarios disponibles para consultar en las fechas seleccionadas.');
+      return;
+    }
+
+    console.log(`🔍 Consultando ${consultasAHacer.length} fechas...`);
+    setProgreso({ actual: 0, total: consultasAHacer.length });
+
+    // Usar la función correcta de la API
+    const resultados = await consultarDisponibilidadRango(
+      consultasAHacer,
+      (actual, total) => setProgreso({ actual, total })
+    );
+
+    // Actualizar estado con resultados
+    const nuevoEstado = {};
+    resultados.forEach(resultado => {
+      if (resultado && resultado.fecha) {
+        nuevoEstado[resultado.fecha] = resultado;
+      }
+    });
+
+    setDisponibilidad(prev => ({ ...prev, ...nuevoEstado }));
+    setUltimaActualizacion(new Date());
+    console.log(`✅ Disponibilidad actualizada: ${Object.keys(nuevoEstado).length} fechas`);
+
+  } catch (error) {
+    console.error('Error al consultar disponibilidad:', error);
+    alert(`Error al consultar disponibilidad: ${error.message}. 
+           Por favor intenta nuevamente o contacta con soporte.`);
+  } finally {
+    setConsultando(false);
+    setProgreso({ actual: 0, total: 0 });
+  }
+};
 
   // Refrescar cache
   const refrescarCache = () => {
-    limpiarCacheDisponibilidad();
+    // limpiarCacheDisponibilidad(); // Si existe esta función
     setDisponibilidad({});
     setUltimaActualizacion(null);
+    // Recargar cumpleaños también
+    let fechaInicio, fechaFin;
+    if (vista === 'mes') {
+      const primerDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
+      const ultimoDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
+      fechaInicio = primerDia;
+      fechaFin = ultimoDia;
+    } else if (vista === 'semana') {
+      const dias = obtenerDiasSemana(fechaActual);
+      fechaInicio = dias[0];
+      fechaFin = dias[6];
+    } else {
+      fechaInicio = fechaActual;
+      fechaFin = fechaActual;
+    }
+    cargarCumpleanosRegistrados(fechaInicio, fechaFin);
   };
 
   // Obtener badge de disponibilidad para una fecha
@@ -192,6 +335,27 @@ const CalendarioDisponibilidad = () => {
     } else {
       return <Badge bg="danger" className="w-100 mt-1">✗ Ocupado</Badge>;
     }
+  };
+
+  // Renderizar cumpleaños del día
+  const renderCumpleanosDelDia = (fecha) => {
+    const fechaStr = formatearFecha(fecha);
+    const cumpleanosDia = cumpleanosRegistrados[fechaStr];
+    
+    if (!cumpleanosDia || cumpleanosDia.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-1">
+        {cumpleanosDia.map((cumple, index) => (
+          <div key={index} className="small text-primary mb-1">
+            🎂 {cumple.nombre_ninio || 'Cumple'} ({cumple.hora_inicio})
+            {cumple.tema && <div className="text-muted ultra-small">{cumple.tema}</div>}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   // Renderizar vista de mes
@@ -237,6 +401,10 @@ const CalendarioDisponibilidad = () => {
                           {hoy && <Badge bg="primary" className="ms-1" style={{ fontSize: '0.6rem' }}>📍</Badge>}
                         </div>
                         {!pasado && mesActual && obtenerBadgeDisponibilidad(fecha)}
+                        
+                        {/* Mostrar cumpleaños del día */}
+                        {!pasado && mesActual && renderCumpleanosDelDia(fecha)}
+                        
                         {pasado && <small className="text-muted">Pasado</small>}
                       </Card.Body>
                     </Card>
@@ -290,6 +458,10 @@ const CalendarioDisponibilidad = () => {
                           <Badge bg="secondary">⚠ {info.resumen.errores}</Badge>
                         )}
                       </div>
+                      
+                      {/* Mostrar cumpleaños del día */}
+                      {renderCumpleanosDelDia(fecha)}
+                      
                       <div className="small">
                         {info.horarios.map((h, i) => (
                           <div key={i} className="d-flex justify-content-between mb-1">
@@ -302,7 +474,11 @@ const CalendarioDisponibilidad = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-muted mb-0 small">Sin consultar</p>
+                    <div>
+                      <p className="text-muted mb-0 small">Sin consultar</p>
+                      {/* Mostrar cumpleaños incluso si no se consultó disponibilidad */}
+                      {renderCumpleanosDelDia(fecha)}
+                    </div>
                   )}
                 </Card.Body>
               </Card>
@@ -329,6 +505,14 @@ const CalendarioDisponibilidad = () => {
             {esFinDeSemana(fechaActual) ? 'Fin de Semana' : 'Entre Semana'}
           </Badge>
         </Alert>
+
+        {/* Mostrar cumpleaños del día en vista día */}
+        {renderCumpleanosDelDia(fechaActual) && (
+          <Alert variant="info" className="mb-3">
+            <h6>🎂 Cumpleaños Registrados para este día:</h6>
+            {renderCumpleanosDelDia(fechaActual)}
+          </Alert>
+        )}
 
         <div className="d-grid gap-3">
           {horariosConfig.map((hora, idx) => {
@@ -411,6 +595,15 @@ const CalendarioDisponibilidad = () => {
         <h5>
           {diasSemana[fechaSeleccionada.getDay()]}, {fechaSeleccionada.getDate()} de {meses[fechaSeleccionada.getMonth()]}
         </h5>
+        
+        {/* Mostrar cumpleaños en el modal de detalles */}
+        {renderCumpleanosDelDia(fechaSeleccionada) && (
+          <div className="mb-3">
+            <h6>🎂 Cumpleaños Registrados:</h6>
+            {renderCumpleanosDelDia(fechaSeleccionada)}
+          </div>
+        )}
+        
         {info ? (
           <div>
             <div className="mb-2">
@@ -444,6 +637,7 @@ const CalendarioDisponibilidad = () => {
   };
 
   return (
+
     <Card className="mb-4 border-info">
       <Card.Header className="bg-info bg-opacity-10">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -581,6 +775,7 @@ const CalendarioDisponibilidad = () => {
             <span><Badge bg="danger">✗</Badge> Ocupado/Bloqueado</span>
             <span><Badge bg="secondary">?</Badge> Error de consulta</span>
             <span><Badge bg="primary">📍</Badge> Hoy</span>
+            <span><Badge bg="info">🎂</Badge> Cumpleaños registrado</span>
           </small>
         </Alert>
 
@@ -601,6 +796,7 @@ const CalendarioDisponibilidad = () => {
             <ul className="mb-0">
               <li><strong>Esta consulta NO crea reservas reales</strong> - solo verifica disponibilidad</li>
               <li>Los datos se actualizan en tiempo real desde el sistema Bookly</li>
+              <li><strong>🎂 Los cumpleaños registrados se muestran en cada día</strong></li>
               <li>Un turno "Ocupado" significa que ya fue reservado por otro cliente</li>
               <li>Las fechas pasadas no se pueden consultar</li>
               <li><strong>Horarios Fin de semana:</strong> 10:30 y 12:20</li>
@@ -611,6 +807,7 @@ const CalendarioDisponibilidad = () => {
         </Alert>
       </Card.Body>
     </Card>
+
   );
 };
 

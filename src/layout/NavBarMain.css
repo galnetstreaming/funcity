@@ -1,0 +1,197 @@
+/* Estilos simplificados para la barra lateral */
+.sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: white;
+  color: #333;
+  transition: all 0.3s;
+  position: fixed;
+  z-index: 1000;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  font-family: 'Arial', sans-serif;
+  border-right: 3px solid #b4afaf; /* Rojo Boom Kids */
+}
+
+.sidebar.collapsed {
+  width: 60px;
+}
+
+.sidebar-header {
+  padding: 15px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #eee;
+}
+
+.logo {
+  max-height: 30px;
+  transition: all 0.3s;
+}
+
+.sidebar.collapsed .logo {
+  opacity: 0;
+  width: 0;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: #080707; /* Rojo */
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.toggle-btn:hover {
+  color: #3A86FF; /* Azul */
+}
+
+.nav-links {
+  padding: 10px 0;
+  list-style: none;
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  color: #555;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.nav-link:hover {
+  background-color: #f5f5f5;
+  color: #0c0c0c; /* Rojo */
+}
+
+.nav-link.active {
+  background-color: #7b7979; /* Rojo */
+  color: white;
+}
+
+.nav-icon {
+  margin-right: 10px;
+  font-size: 1rem;
+  color: #3A86FF; /* Azul */
+}
+
+.nav-link.active .nav-icon {
+  color: white;
+}
+
+.sidebar.collapsed .nav-text {
+  display: none;
+}
+
+.logout-container {
+  margin-top: auto;
+  padding: 10px 0;
+  border-top: 1px solid #eee;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.logout-btn:hover {
+  color: #D00000; /* Rojo */
+  background-color: #fc8282;
+}
+
+.main-content {
+  margin-left: 220px;
+  transition: all 0.3s;
+  min-height: 100vh;
+  background-color: #f9f9f9;
+}
+
+.main-content.collapsed {
+  margin-left: 60px;
+}
+
+/* Secciones */
+.nav-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.nav-section-header {
+  padding: 8px 15px;
+  color: #3A86FF; /* Azul */
+  font-weight: bold;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.sidebar.collapsed .nav-section-header {
+  display: none;
+}
+
+/* Versión móvil */
+@media (max-width: 758px) {
+  .sidebar {
+    width: 60px;
+  }
+  
+  .sidebar:not(.collapsed) {
+    width: 100px;
+  }
+  
+  .main-content {
+    margin-left: 60px;
+  }
+}
+
+/* Estilos para la información del usuario */
+.user-info {
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+  background-color: #f8f9fa;
+}
+
+.user-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-icon {
+  font-size: 2rem;
+  color: #3A86FF;
+}
+
+.user-email {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.user-role {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+
+/* Ajustes para la versión colapsada */
+.sidebar.collapsed .user-info {
+  display: none;
+}
