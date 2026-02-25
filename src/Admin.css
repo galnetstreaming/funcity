@@ -1,0 +1,566 @@
+/* ══════════════════════════════════════════════════════════════
+   Fun City — Admin Layout & Design System
+   Dark navbar · Light content area · Professional & clean
+══════════════════════════════════════════════════════════════ */
+
+/* ── Root ─────────────────────────────────────────────────── */
+.admin-root {
+  min-height: 100vh;
+  background: #f6f8fa;
+}
+
+/* ── Main area ────────────────────────────────────────────── */
+.admin-main {
+  min-height: calc(100vh - 60px);
+}
+
+.admin-container {
+  padding: 0;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PAGE HEADER
+══════════════════════════════════════════════════════════════ */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.page-header-icon {
+  font-size: 2rem;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bfdbfe;
+  flex-shrink: 0;
+}
+
+.page-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 2px 0 0;
+}
+
+.page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.session-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: blink 2s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BANNERS (edición / pre-carga)
+══════════════════════════════════════════════════════════════ */
+.edit-banner {
+  margin: 16px 32px 0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PAGE CONTENT AREA
+══════════════════════════════════════════════════════════════ */
+.page-content {
+  padding: 24px 32px 40px;
+  animation: fadeInUp 0.25s ease;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CARDS — override Bootstrap para estilo limpio
+══════════════════════════════════════════════════════════════ */
+.page-content .card {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s;
+  overflow: hidden;
+}
+
+.page-content .card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.09);
+}
+
+.page-content .card-header {
+  border-radius: 0 !important;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 14px 20px;
+  font-weight: 600;
+  background: #fafbfc !important;
+}
+
+.page-content .card-header.bg-primary.bg-opacity-10 {
+  background: linear-gradient(90deg, #eff6ff, #f8faff) !important;
+  border-bottom-color: #dbeafe;
+}
+
+.page-content .card-header.bg-success.bg-opacity-10 {
+  background: linear-gradient(90deg, #f0fdf4, #f8fff8) !important;
+  border-bottom-color: #bbf7d0;
+}
+
+.page-content .card-header.bg-warning.bg-opacity-10 {
+  background: linear-gradient(90deg, #fffbeb, #fffdf5) !important;
+  border-bottom-color: #fde68a;
+}
+
+.page-content .card-header.bg-info.bg-opacity-10 {
+  background: linear-gradient(90deg, #ecfeff, #f0feff) !important;
+  border-bottom-color: #a5f3fc;
+}
+
+.page-content .card-body {
+  padding: 20px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FORMULARIO — mejoras
+══════════════════════════════════════════════════════════════ */
+.page-content .form-control,
+.page-content .form-select {
+  border-color: #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.page-content .form-control:focus,
+.page-content .form-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+
+.page-content .form-control.is-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220,53,69,0.12);
+}
+
+.page-content .form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.page-content .form-text {
+  font-size: 0.78rem;
+}
+
+/* Botones de horario */
+.page-content .btn-outline-success {
+  border-color: #d1fae5;
+  color: #059669;
+}
+
+.page-content .btn-outline-success:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+.page-content .btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: transparent;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TABLA — estilo refinado
+══════════════════════════════════════════════════════════════ */
+.page-content .table-responsive {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.page-content .table {
+  font-size: 0.875rem;
+  margin-bottom: 0;
+}
+
+.page-content .table thead th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 14px;
+  white-space: nowrap;
+}
+
+.page-content .table-dark th {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+.page-content .table tbody tr {
+  transition: background 0.1s;
+}
+
+.page-content .table-striped > tbody > tr:nth-of-type(odd) > td {
+  background-color: #fafbfc;
+}
+
+.page-content .table tbody tr:hover > td {
+  background: #eff6ff !important;
+}
+
+.page-content .table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BOTONES — override
+══════════════════════════════════════════════════════════════ */
+.page-content .btn {
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.15s;
+}
+
+.page-content .btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgba(59,130,246,0.3);
+}
+
+.page-content .btn-primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  box-shadow: 0 4px 12px rgba(59,130,246,0.35);
+  transform: translateY(-1px);
+}
+
+.page-content .btn-primary:active {
+  transform: translateY(0);
+}
+
+.page-content .btn-lg {
+  padding: 10px 24px;
+  font-size: 0.95rem;
+}
+
+.page-content .btn-warning {
+  color: #92400e;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ALERTS — override
+══════════════════════════════════════════════════════════════ */
+.page-content .alert {
+  border-radius: 10px;
+  border-left-width: 4px;
+  font-size: 0.875rem;
+}
+
+.page-content .alert-info {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.page-content .alert-success {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #14532d;
+}
+
+.page-content .alert-warning {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #78350f;
+}
+
+.page-content .alert-danger {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+.page-content .alert-light {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BADGES — refinados
+══════════════════════════════════════════════════════════════ */
+.page-content .badge {
+  font-size: 0.72rem !important;
+  font-weight: 600;
+  border-radius: 5px;
+}
+
+.page-content .badge.font-monospace {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  letter-spacing: 0.3px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CALENDARIO — ajustes
+══════════════════════════════════════════════════════════════ */
+.page-content .calendario-container .card {
+  cursor: pointer;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   EMPTY STATE
+══════════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center;
+  padding: 80px 24px;
+  color: #6b7280;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.7;
+}
+
+.empty-state h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INPUT NUMBER CENTRADO
+══════════════════════════════════════════════════════════════ */
+input[type="number"].text-center {
+  -moz-appearance: textfield;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TOAST OVERRIDE
+══════════════════════════════════════════════════════════════ */
+.toast {
+  border-radius: 10px !important;
+  border: none !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODAL OVERRIDE
+══════════════════════════════════════════════════════════════ */
+.modal-content {
+  border-radius: 14px;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  border-bottom: 1px solid #f3f4f6;
+  padding: 18px 24px;
+}
+
+.modal-footer {
+  border-top: 1px solid #f3f4f6;
+  padding: 14px 24px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STATS CARDS (en ListaReservas / Historial)
+══════════════════════════════════════════════════════════════ */
+.page-content .card.border-primary.bg-primary {
+  border-color: #bfdbfe !important;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+}
+
+.page-content .card.border-info.bg-info {
+  border-color: #a5f3fc !important;
+  background: linear-gradient(135deg, #ecfeff, #cffafe) !important;
+}
+
+.page-content .card.border-success.bg-success {
+  border-color: #bbf7d0 !important;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
+}
+
+.page-content .card.border-secondary.bg-secondary {
+  border-color: #e5e7eb !important;
+  background: linear-gradient(135deg, #f9fafb, #f3f4f6) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 16px 20px;
+  }
+
+  .page-content {
+    padding: 16px 16px 32px;
+  }
+
+  .edit-banner {
+    margin: 12px 16px 0;
+  }
+
+  .page-title {
+    font-size: 1.15rem;
+  }
+
+  .page-header-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.5rem;
+  }
+
+  .page-content .card-body {
+    padding: 14px;
+  }
+
+  .page-content .table td,
+  .page-content .table thead th {
+    padding: 10px 10px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-content {
+    padding: 12px 10px 28px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT
+══════════════════════════════════════════════════════════════ */
+@media print {
+  .admin-root > nav,
+  .page-header-right,
+  .edit-banner,
+  .btn,
+  .toast-container {
+    display: none !important;
+  }
+
+  .page-content {
+    padding: 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FORMULARIO — validación de contacto (teléfono / email)
+══════════════════════════════════════════════════════════════ */
+
+.input-with-status {
+  position: relative;
+}
+
+.input-with-status .form-control {
+  padding-right: 2.5rem;
+}
+
+.field-valid-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #16a34a;
+  font-size: 1rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Indicador de dígitos del teléfono */
+.telefono-digits-indicator {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.telefono-digits-bar {
+  height: 4px;
+  border-radius: 2px;
+  transition: width 0.25s ease, background-color 0.25s ease;
+  flex-shrink: 0;
+  background: #d1d5db;
+}
+
+.telefono-digits-bar.bar-error { background: #ef4444; }
+.telefono-digits-bar.bar-warn  { background: #f59e0b; }
+.telefono-digits-bar.bar-ok    { background: #22c55e; }
+
+.telefono-digits-count {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+/* Feedback verde (Bootstrap isValid) */
+.page-content .form-control.is-valid {
+  border-color: #22c55e;
+  background-image: none; /* quitar ícono de Bootstrap */
+}
+
+.page-content .form-control.is-valid:focus {
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+}

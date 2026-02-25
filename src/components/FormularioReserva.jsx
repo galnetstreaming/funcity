@@ -1,216 +1,401 @@
-import { useState } from 'react';
-import { Form, Button, Row, Col, Alert, Card, Badge, ButtonGroup } from 'react-bootstrap';
-import NavBarMain from '../layout/NavBarMain';
+import { useState, useEffect } from 'react';
+import {
+  Form, Button, Row, Col, Alert, Card, Badge, ButtonGroup, Spinner
+} from 'react-bootstrap';
+import {
+  crearReserva,
+  eliminarBloqueo,
+  consultarDisponibilidadReal,
+  obtenerHorariosParaFecha,
+  esFinDeSemana,
+  validarDatosReserva,
+  validarHorarioSegunDia,
+} from '../services/api';
 
-const FormularioReserva = ({ onGuardar, deshabilitado }) => {
-  const [formData, setFormData] = useState({
-    nombre_ninio: '',
-    fecha: '',
-    hora_inicio: '',
-    personas: '',
-    email: '',
-    telefono: '',
-    tema: ''
-  });
+// ─── Temas sugeridos ──────────────────────────────────────────
+const TEMAS_POPULARES = [
+  '🦸 Superhéroes', '👸 Princesas', '🦖 Dinosaurios', '🎮 Videojuegos',
+  '⚽ Deportes',    '🎨 Arte',      '🚀 Espacio',     '🧚 Hadas',
+  '🦄 Unicornios',  '🏴‍☠️ Piratas', '❄️ Frozen',      '🕷️ Spider-Man',
+  '🚗 Cars',        '🧱 Minecraft', '🪄 Harry Potter','🐾 Paw Patrol',
+];
 
-  const [errores, setErrores] = useState({});
+const FORM_VACIO = {
+  nombre_ninio: '', fecha: '', hora_inicio: '',
+  personas: '', email: '', telefono: '', tema: '', notas: '',
+};
 
-  // Horarios disponibles por tipo de día (EXACTOS según API de Bookly)
-  const horariosDisponibles = {
-    finDeSemana: ['10:30', '12:20'], // Staff ID 6 - Confirmado por API
-    entreSemana: ['12:30', '14:20', '16:10'] // Staff ID 7 - Confirmado por API
+// ─── Componente principal ─────────────────────────────────────
+const FormularioReserva = ({
+  onReservaCreada,   // callback (reserva) => void — llamado al guardar con éxito
+  modoEdicion = false,
+  reservaEditar = null,
+  onCancelarEdicion,
+}) => {
+  const [formData, setFormData]         = useState(FORM_VACIO);
+  const [errores, setErrores]           = useState({});
+  const [enviando, setEnviando]         = useState(false);
+  const [exito, setExito]               = useState(null);   // objeto reserva creada
+  const [errorGlobal, setErrorGlobal]   = useState('');
+
+  // Verificación de disponibilidad en tiempo real
+  const [dispEstado, setDispEstado]     = useState(null);   // null | 'verificando' | 'disponible' | 'ocupado' | 'error'
+  const [dispMensaje, setDispMensaje]   = useState('');
+  const [dispCapacidad, setDispCapacidad] = useState(null);
+
+  // ── Cargar datos al editar ──────────────────────────────────
+  useEffect(() => {
+    if (modoEdicion && reservaEditar) {
+      setFormData({
+        nombre_ninio: reservaEditar.nombre_ninio || '',
+        fecha:        reservaEditar.fecha        || '',
+        hora_inicio:  reservaEditar.hora_inicio  || '',
+        personas:     String(reservaEditar.personas || ''),
+        email:        reservaEditar.email && reservaEditar.email !== 'bloqueo@funcity.com.ar' ? reservaEditar.email : '',
+        telefono:     reservaEditar.telefono || '',
+        tema:         reservaEditar.tema     || '',
+        notas:        reservaEditar.notas    || '',
+      });
+    }
+  }, [modoEdicion, reservaEditar]);
+
+  // ── Verificar disponibilidad cuando cambian fecha/hora/personas ──
+  useEffect(() => {
+    if (!formData.fecha || !formData.hora_inicio || !formData.personas) {
+      setDispEstado(null); setDispMensaje(''); setDispCapacidad(null);
+      return;
+    }
+    // En modo edición no re-verificar si no cambió fecha/hora
+    if (modoEdicion && reservaEditar) {
+      const mismaFechaHora =
+        formData.fecha === reservaEditar.fecha &&
+        formData.hora_inicio === reservaEditar.hora_inicio;
+      if (mismaFechaHora) {
+        setDispEstado('disponible');
+        setDispMensaje('Horario original de la reserva');
+        return;
+      }
+    }
+
+    let cancelado = false;
+    setDispEstado('verificando');
+    setDispMensaje('Verificando disponibilidad...');
+
+    consultarDisponibilidadReal({
+      fecha:       formData.fecha,
+      hora_inicio: formData.hora_inicio,
+      personas:    parseInt(formData.personas) || 1,
+    }).then(res => {
+      if (cancelado) return;
+      if (res.disponible) {
+        setDispEstado('disponible');
+        setDispCapacidad(res.capacidadRestante);
+        setDispMensaje(
+          res.capacidadRestante != null
+            ? `✅ Disponible — ${res.capacidadRestante} lugares libres`
+            : '✅ Horario disponible'
+        );
+      } else {
+        setDispEstado('ocupado');
+        setDispCapacidad(0);
+        setDispMensaje(res.error || '❌ Este horario no está disponible');
+      }
+    });
+    return () => { cancelado = true; };
+  }, [formData.fecha, formData.hora_inicio, formData.personas]);
+
+  // ── Validación en tiempo real por campo ──────────────────────
+  const validarCampo = (name, value) => {
+    switch (name) {
+      case 'nombre_ninio':
+        if (!value.trim() || value.trim().length < 2)
+          return 'Nombre requerido (mínimo 2 caracteres)';
+        if (value.trim().length > 60)
+          return 'Máximo 60 caracteres';
+        return '';
+
+      case 'email':
+        if (!value) return ''; // opcional
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+          return 'Email inválido (ej: nombre@dominio.com)';
+        return '';
+
+      case 'telefono':
+        if (!value) return ''; // opcional
+        // Solo dígitos, espacios, +, -, ()
+        if (/[^0-9\s\+\-\(\)]/.test(value))
+          return 'Solo se permiten números, espacios y los caracteres: + - ( )';
+        const soloDigitos = value.replace(/\D/g, '');
+        if (soloDigitos.length < 8)
+          return 'Mínimo 8 dígitos';
+        if (soloDigitos.length > 15)
+          return 'Máximo 15 dígitos';
+        return '';
+
+      case 'personas': {
+        if (!value) return 'La cantidad de personas es requerida';
+        const p = parseInt(value);
+        if (isNaN(p) || p < 1) return 'Mínimo 1 persona';
+        if (p > 40)            return 'Máximo 40 personas';
+        return '';
+      }
+
+      default:
+        return '';
+    }
   };
 
+  // ── Handlers ─────────────────────────────────────────────────
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    if (errores[name]) {
-      setErrores(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+
+    // Teléfono: bloquear letras y caracteres no permitidos en tiempo real
+    if (name === 'telefono') {
+      const limpio = value.replace(/[^0-9\s\+\-\(\)]/g, '');
+      const errorInmediato = validarCampo('telefono', limpio);
+      setFormData(prev => ({ ...prev, telefono: limpio }));
+      setErrores(prev => ({ ...prev, telefono: errorInmediato }));
+      if (errorGlobal) setErrorGlobal('');
+      return;
     }
+
+    setFormData(prev => {
+      const next = { ...prev, [name]: value };
+      if (name === 'fecha') next.hora_inicio = ''; // reset hora al cambiar fecha
+      return next;
+    });
+
+    // Validar el campo mientras escribe (solo si ya tiene valor o ya fue tocado)
+    const errorCampo = validarCampo(name, value);
+    setErrores(prev => ({ ...prev, [name]: errorCampo }));
+    if (errorGlobal) setErrorGlobal('');
   };
 
   const handleHoraClick = (hora) => {
-    setFormData(prev => ({
-      ...prev,
-      hora_inicio: hora
-    }));
-    
-    if (errores.hora_inicio) {
-      setErrores(prev => ({
-        ...prev,
-        hora_inicio: ''
-      }));
-    }
+    setFormData(prev => ({ ...prev, hora_inicio: hora }));
+    if (errores.hora_inicio) setErrores(prev => ({ ...prev, hora_inicio: '' }));
   };
 
-  const esFinDeSemana = (fecha) => {
-    if (!fecha) return false;
-    const dia = new Date(fecha + 'T00:00:00').getDay();
-    return dia === 0 || dia === 6; // 0 = Domingo, 6 = Sábado
+  const handleTemaClick = (tema) => {
+    setFormData(prev => ({ ...prev, tema }));
   };
 
-  const obtenerHorariosDisponibles = () => {
-    if (!formData.fecha) return [];
-    return esFinDeSemana(formData.fecha) 
-      ? horariosDisponibles.finDeSemana 
-      : horariosDisponibles.entreSemana;
-  };
-
-  const validarFormulario = () => {
-    const nuevosErrores = {};
-
-    if (!formData.fecha) {
-      nuevosErrores.fecha = 'La fecha es requerida';
-    } else {
-      const fechaSeleccionada = new Date(formData.fecha + 'T00:00:00');
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      
-      if (fechaSeleccionada < hoy) {
-        nuevosErrores.fecha = 'La fecha no puede ser anterior a hoy';
-      }
-    }
-
-    if (!formData.hora_inicio) {
-      nuevosErrores.hora_inicio = 'La hora es requerida';
-    }
-
-    if (!formData.personas) {
-      nuevosErrores.personas = 'La cantidad de personas es requerida';
-    } else {
-      const personas = parseInt(formData.personas);
-      if (personas < 1 || personas > 40) {
-        nuevosErrores.personas = 'La cantidad debe estar entre 1 y 40';
-      }
-    }
-
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      nuevosErrores.email = 'Email inválido';
-    }
-
-    if (formData.telefono && !/^[0-9]{8,15}$/.test(formData.telefono.replace(/\s/g, ''))) {
-      nuevosErrores.telefono = 'Teléfono inválido (8-15 dígitos)';
-    }
-
-    setErrores(nuevosErrores);
-    return Object.keys(nuevosErrores).length === 0;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    if (validarFormulario()) {
-      const datosEnviar = {
-        fecha: formData.fecha,
-        hora_inicio: formData.hora_inicio,
-        personas: parseInt(formData.personas)
-      };
-
-      if (formData.nombre_ninio.trim()) datosEnviar.nombre_ninio = formData.nombre_ninio.trim();
-      if (formData.email.trim()) datosEnviar.email = formData.email.trim();
-      if (formData.telefono.trim()) datosEnviar.telefono = formData.telefono.trim();
-      if (formData.tema.trim()) datosEnviar.tema = formData.tema.trim();
-
-      onGuardar(datosEnviar);
-      handleReset();
-    }
+  const handlePersonasQuick = (cant) => {
+    setFormData(prev => ({ ...prev, personas: String(cant) }));
+    if (errores.personas) setErrores(prev => ({ ...prev, personas: '' }));
   };
 
   const handleReset = () => {
-    setFormData({
-      nombre_ninio: '',
-      fecha: '',
-      hora_inicio: '',
-      personas: '',
-      email: '',
-      telefono: '',
-      tema: ''
-    });
+    setFormData(FORM_VACIO);
     setErrores({});
+    setErrorGlobal('');
+    setExito(null);
+    setDispEstado(null);
   };
 
-  const obtenerFechaMinima = () => {
-    const hoy = new Date();
-    return hoy.toISOString().split('T')[0];
+  // ── Validación completa al enviar ─────────────────────────────
+  const validarFront = () => {
+    const nuevos = {};
+
+    // Nombre
+    const errNombre = validarCampo('nombre_ninio', formData.nombre_ninio);
+    if (errNombre) nuevos.nombre_ninio = errNombre;
+
+    // Fecha
+    if (!formData.fecha) {
+      nuevos.fecha = 'La fecha es requerida';
+    } else {
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const sel = new Date(formData.fecha + 'T00:00:00');
+      if (sel < hoy) nuevos.fecha = 'La fecha no puede ser anterior a hoy';
+      const max = new Date(); max.setMonth(max.getMonth() + 6);
+      if (sel > max) nuevos.fecha = 'Máximo 6 meses de anticipación';
+    }
+
+    // Hora
+    if (!formData.hora_inicio) {
+      nuevos.hora_inicio = 'Seleccioná un horario';
+    } else {
+      const valH = validarHorarioSegunDia(formData.fecha, formData.hora_inicio);
+      if (!valH.valido) nuevos.hora_inicio = valH.mensaje;
+    }
+
+    // Personas
+    const errPersonas = validarCampo('personas', formData.personas);
+    if (errPersonas) nuevos.personas = errPersonas;
+
+    // Email
+    const errEmail = validarCampo('email', formData.email);
+    if (errEmail) nuevos.email = errEmail;
+
+    // Teléfono
+    const errTelefono = validarCampo('telefono', formData.telefono);
+    if (errTelefono) nuevos.telefono = errTelefono;
+
+    setErrores(nuevos);
+    return Object.keys(nuevos).length === 0;
   };
+
+  // ── Submit ────────────────────────────────────────────────────
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validarFront()) return;
+
+    if (dispEstado === 'ocupado' && !modoEdicion) {
+      setErrorGlobal('❌ El horario seleccionado no está disponible. Elegí otra fecha u horario.');
+      return;
+    }
+
+    setEnviando(true);
+    setErrorGlobal('');
+
+    try {
+      const datos = {
+        fecha:        formData.fecha,
+        hora_inicio:  formData.hora_inicio,
+        personas:     parseInt(formData.personas),
+        nombre_ninio: formData.nombre_ninio.trim(),
+        email:        formData.email.trim()    || undefined,
+        telefono:     formData.telefono.trim() || undefined,
+        tema:         formData.tema.trim()     || undefined,
+        notas:        formData.notas.trim()    || undefined,
+      };
+
+      let reservaResultado;
+
+      if (modoEdicion && reservaEditar?.bloqueo_id) {
+        // Edición: eliminar bloqueo anterior y crear nuevo
+        await eliminarBloqueo(reservaEditar.bloqueo_id);
+        reservaResultado = await crearReserva(datos);
+      } else {
+        reservaResultado = await crearReserva(datos);
+      }
+
+      setExito(reservaResultado);
+      if (onReservaCreada) onReservaCreada(reservaResultado);
+      if (!modoEdicion) handleReset();
+
+    } catch (err) {
+      setErrorGlobal(err.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  // ── Helpers de render ─────────────────────────────────────────
+  const obtenerFechaMinima = () => new Date().toISOString().split('T')[0];
 
   const formatearFechaLegible = (fecha) => {
     if (!fecha) return '';
-    const opciones = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return new Date(fecha + 'T00:00:00').toLocaleDateString('es-AR', opciones);
+    return new Date(fecha + 'T00:00:00').toLocaleDateString('es-AR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
   };
 
-  const temasPopulares = [
-    '🦸 Superhéroes',
-    '👸 Princesas',
-    '🦖 Dinosaurios',
-    '🎮 Videojuegos',
-    '⚽ Deportes',
-    '🎨 Arte',
-    '🚀 Espacio',
-    '🧚 Hadas',
-    '🦄 Unicornios',
-    '🏴‍☠️ Piratas'
-  ];
+  const horariosDelDia = formData.fecha ? obtenerHorariosParaFecha(formData.fecha) : [];
+  const finDeSemana    = formData.fecha ? esFinDeSemana(formData.fecha) : false;
+  const personasNum    = parseInt(formData.personas) || 0;
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────
+
+  // ── Vista de éxito ──
+  if (exito && !modoEdicion) {
+    return (
+      <Alert variant="success" className="p-4">
+        <div className="text-center mb-3">
+          <span style={{ fontSize: '3rem' }}>🎉</span>
+        </div>
+        <Alert.Heading className="text-center">¡Reserva Creada con Éxito!</Alert.Heading>
+        <hr />
+        <Row>
+          <Col md={6}>
+            <p><strong>🆔 ID Bloqueo:</strong> <Badge bg="success">#{exito.bloqueo_id}</Badge></p>
+            <p><strong>🎂 Festejado/a:</strong> {exito.nombre_ninio}</p>
+            <p><strong>📅 Fecha:</strong> {formatearFechaLegible(exito.fecha)}</p>
+          </Col>
+          <Col md={6}>
+            <p><strong>🕐 Hora:</strong> {exito.hora_inicio}</p>
+            <p><strong>👥 Personas:</strong> {exito.personas}</p>
+            {exito.tema && <p><strong>🎨 Tema:</strong> {exito.tema}</p>}
+          </Col>
+        </Row>
+        <div className="d-flex justify-content-center gap-3 mt-3">
+          <Button variant="success" onClick={handleReset}>
+            ➕ Nueva Reserva
+          </Button>
+        </div>
+      </Alert>
+    );
+  }
 
   return (
- 
-    <Form onSubmit={handleSubmit}>
-      {/* Información de horarios */}
+    <Form onSubmit={handleSubmit} noValidate>
+
+      {/* ── Error global ── */}
+      {errorGlobal && (
+        <Alert variant="danger" onClose={() => setErrorGlobal('')} dismissible>
+          {errorGlobal}
+        </Alert>
+      )}
+
+      {/* ── Éxito en modo edición ── */}
+      {exito && modoEdicion && (
+        <Alert variant="success" dismissible onClose={() => setExito(null)}>
+          ✅ Reserva actualizada correctamente — Nuevo ID: <Badge bg="success">#{exito.bloqueo_id}</Badge>
+        </Alert>
+      )}
+
+      {/* ── Info horarios ── */}
       <Alert variant="info" className="mb-4">
-        <div className="d-flex align-items-center">
-          <span className="fs-4 me-2">📅</span>
+        <div className="d-flex align-items-start gap-2">
+          <span className="fs-4">📅</span>
           <div>
-            <strong>Horarios Disponibles:</strong>
-            <div className="mt-2">
-              <Badge bg="primary" className="me-2">Fin de Semana y Feriados</Badge>
-              <small className="text-muted">10:30, 12:20</small>
-              <br />
-              <Badge bg="success" className="me-2 mt-1">$28,000</Badge>
-            </div>
-            <div className="mt-2">
-              <Badge bg="secondary" className="me-2">Lunes a Viernes</Badge>
-              <small className="text-muted">12:30, 14:20, 16:10</small>
-              <br />
-              <Badge bg="success" className="me-2 mt-1">$25,000</Badge>
+            <strong>Horarios disponibles:</strong>
+            <div className="d-flex flex-wrap gap-3 mt-2">
+              <div>
+                <Badge bg="primary" className="me-1">Fin de semana y feriados</Badge>
+                <small className="text-muted">10:30 · 12:20 · 14:10 · 16:00</small>
+                <Badge bg="success" className="ms-2">$28.000</Badge>
+              </div>
+              <div>
+                <Badge bg="secondary" className="me-1">Lunes a viernes</Badge>
+                <small className="text-muted">12:30 · 14:20 · 16:10</small>
+                <Badge bg="success" className="ms-2">$25.000</Badge>
+              </div>
             </div>
           </div>
         </div>
       </Alert>
 
-      {/* Información del cumpleañero */}
-      <Card className="mb-4 border-primary">
+      {/* ══════════════════════════════════════════
+          SECCIÓN 1 — Datos del festejado/a
+      ══════════════════════════════════════════ */}
+      <Card className="mb-4 border-primary shadow-sm">
         <Card.Header className="bg-primary bg-opacity-10">
-          <h5 className="mb-0 text-primary">🎂 Datos del Cumpleañero</h5>
+          <h5 className="mb-0 text-primary">🎂 Datos del Festejado/a</h5>
         </Card.Header>
         <Card.Body>
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label className="fw-bold">Nombre del Niño/a</Form.Label>
+                <Form.Label className="fw-bold">
+                  Nombre del Niño/a <span className="text-danger">*</span>
+                </Form.Label>
                 <Form.Control
                   type="text"
                   name="nombre_ninio"
                   value={formData.nombre_ninio}
                   onChange={handleChange}
-                  placeholder="Ej: Sofía"
-                  disabled={deshabilitado}
+                  placeholder="Ej: Valentina García"
+                  isInvalid={!!errores.nombre_ninio}
                   size="lg"
+                  maxLength={60}
                 />
+                <Form.Control.Feedback type="invalid">{errores.nombre_ninio}</Form.Control.Feedback>
                 <Form.Text className="text-muted">
-                  <small>💡 Aparecerá en el calendario de Bookly</small>
+                  💡 Aparecerá en el calendario de Bookly como «BLOQUEO - Cumple {formData.nombre_ninio || 'Nombre'}»
                 </Form.Text>
               </Form.Group>
             </Col>
@@ -219,32 +404,48 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">Tema del Cumpleaños</Form.Label>
                 <Form.Control
-                  as="select"
+                  type="text"
                   name="tema"
                   value={formData.tema}
                   onChange={handleChange}
-                  disabled={deshabilitado}
+                  placeholder="Ej: Superhéroes Marvel"
                   size="lg"
-                >
-                  <option value="">Seleccionar tema (opcional)</option>
-                  {temasPopulares.map((tema, index) => (
-                    <option key={index} value={tema}>{tema}</option>
+                  list="temas-list"
+                  maxLength={80}
+                />
+                <datalist id="temas-list">
+                  {TEMAS_POPULARES.map(t => <option key={t} value={t} />)}
+                </datalist>
+                <Form.Text className="text-muted">Podés escribir el tuyo o elegir uno de los populares:</Form.Text>
+                <div className="d-flex flex-wrap gap-1 mt-2">
+                  {TEMAS_POPULARES.map(t => (
+                    <Badge
+                      key={t}
+                      bg={formData.tema === t ? 'primary' : 'light'}
+                      text={formData.tema === t ? 'white' : 'dark'}
+                      style={{ cursor: 'pointer', fontSize: '0.75rem' }}
+                      onClick={() => handleTemaClick(t)}
+                    >
+                      {t}
+                    </Badge>
                   ))}
-                </Form.Control>
+                </div>
               </Form.Group>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
-      {/* Fecha y Hora */}
-      <Card className="mb-4 border-success">
+      {/* ══════════════════════════════════════════
+          SECCIÓN 2 — Fecha y horario
+      ══════════════════════════════════════════ */}
+      <Card className="mb-4 border-success shadow-sm">
         <Card.Header className="bg-success bg-opacity-10">
           <h5 className="mb-0 text-success">📆 Fecha y Horario</h5>
         </Card.Header>
         <Card.Body>
           <Row>
-            <Col md={6}>
+            <Col md={5}>
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">
                   Fecha <span className="text-danger">*</span>
@@ -256,21 +457,18 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
                   onChange={handleChange}
                   min={obtenerFechaMinima()}
                   isInvalid={!!errores.fecha}
-                  required
-                  disabled={deshabilitado}
                   size="lg"
                 />
-                <Form.Control.Feedback type="invalid">
-                  {errores.fecha}
-                </Form.Control.Feedback>
-                
+                <Form.Control.Feedback type="invalid">{errores.fecha}</Form.Control.Feedback>
+
                 {formData.fecha && (
-                  <Alert variant="light" className="mt-2 py-2">
-                    <small className="text-muted">
+                  <Alert variant="light" className="mt-2 py-2 mb-0 border">
+                    <small>
                       📅 {formatearFechaLegible(formData.fecha)}
-                      {esFinDeSemana(formData.fecha) 
-                        ? <Badge bg="primary" className="ms-2">Fin de Semana</Badge>
-                        : <Badge bg="secondary" className="ms-2">Entre Semana</Badge>
+                      {' '}
+                      {finDeSemana
+                        ? <Badge bg="primary">Fin de semana — $28.000</Badge>
+                        : <Badge bg="secondary">Entre semana — $25.000</Badge>
                       }
                     </small>
                   </Alert>
@@ -278,113 +476,161 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
               </Form.Group>
             </Col>
 
-            <Col md={6}>
+            <Col md={7}>
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">
                   Hora de Inicio <span className="text-danger">*</span>
                 </Form.Label>
-                
+
                 {formData.fecha ? (
-                  <div>
+                  <>
                     <div className="d-grid gap-2">
-                      {obtenerHorariosDisponibles().map((hora) => (
+                      {horariosDelDia.map(hora => (
                         <Button
                           key={hora}
                           variant={formData.hora_inicio === hora ? 'success' : 'outline-success'}
                           onClick={() => handleHoraClick(hora)}
-                          disabled={deshabilitado}
+                          className="text-start d-flex align-items-center justify-content-between"
                           size="lg"
-                          className="text-start"
+                          type="button"
                         >
-                          <span className="fs-5">🕐</span> {hora}
+                          <span><span className="me-2">🕐</span>{hora}</span>
                           {formData.hora_inicio === hora && (
-                            <Badge bg="light" text="dark" className="ms-2">✓ Seleccionado</Badge>
+                            <Badge bg="light" text="dark">✓ Seleccionado</Badge>
                           )}
                         </Button>
                       ))}
                     </div>
-                    
                     {errores.hora_inicio && (
-                      <div className="text-danger small mt-2">
-                        {errores.hora_inicio}
-                      </div>
+                      <div className="text-danger small mt-2">{errores.hora_inicio}</div>
                     )}
-                  </div>
+                  </>
                 ) : (
                   <Alert variant="warning" className="mb-0">
-                    <small>👆 Primero selecciona una fecha</small>
+                    <small>👆 Primero seleccioná una fecha para ver los horarios disponibles</small>
                   </Alert>
                 )}
               </Form.Group>
             </Col>
           </Row>
+
+          {/* ── Verificador de disponibilidad ── */}
+          {formData.fecha && formData.hora_inicio && formData.personas && (
+            <Alert
+              variant={
+                dispEstado === 'verificando' ? 'light' :
+                dispEstado === 'disponible'  ? 'success' :
+                dispEstado === 'ocupado'     ? 'danger'  : 'light'
+              }
+              className="mb-0 d-flex align-items-center gap-2"
+            >
+              {dispEstado === 'verificando' && <Spinner animation="border" size="sm" />}
+              <span>{dispMensaje}</span>
+              {dispEstado === 'disponible' && dispCapacidad != null && (
+                <Badge bg="success" className="ms-auto">{dispCapacidad} lugares libres</Badge>
+              )}
+            </Alert>
+          )}
         </Card.Body>
       </Card>
 
-      {/* Cantidad de personas */}
-      <Card className="mb-4 border-warning">
+      {/* ══════════════════════════════════════════
+          SECCIÓN 3 — Invitados
+      ══════════════════════════════════════════ */}
+      <Card className="mb-4 border-warning shadow-sm">
         <Card.Header className="bg-warning bg-opacity-10">
           <h5 className="mb-0 text-warning">👥 Cantidad de Invitados</h5>
         </Card.Header>
         <Card.Body>
-          <Form.Group className="mb-3">
+          <Form.Group>
             <Form.Label className="fw-bold">
               Cantidad de Personas <span className="text-danger">*</span>
             </Form.Label>
-            <Form.Control
-              type="number"
-              name="personas"
-              value={formData.personas}
-              onChange={handleChange}
-              min="1"
-              max="40"
-              isInvalid={!!errores.personas}
-              required
-              disabled={deshabilitado}
-              size="lg"
-              placeholder="Ingresa la cantidad de personas"
-            />
-            <Form.Control.Feedback type="invalid">
+
+            <Row className="align-items-center g-3">
+              <Col xs="auto">
+                <Button
+                  variant="outline-secondary"
+                  type="button"
+                  onClick={() => handlePersonasQuick(Math.max(1, personasNum - 1))}
+                  disabled={personasNum <= 1}
+                  style={{ width: 48, height: 48, fontSize: 20 }}
+                >
+                  −
+                </Button>
+              </Col>
+              <Col xs={3} md={2}>
+                <Form.Control
+                  type="number"
+                  name="personas"
+                  value={formData.personas}
+                  onChange={handleChange}
+                  min="1" max="40"
+                  isInvalid={!!errores.personas}
+                  size="lg"
+                  className="text-center fw-bold"
+                  style={{ fontSize: '1.4rem' }}
+                />
+              </Col>
+              <Col xs="auto">
+                <Button
+                  variant="outline-secondary"
+                  type="button"
+                  onClick={() => handlePersonasQuick(Math.min(40, personasNum + 1))}
+                  disabled={personasNum >= 40}
+                  style={{ width: 48, height: 48, fontSize: 20 }}
+                >
+                  +
+                </Button>
+              </Col>
+              {formData.personas && !errores.personas && (
+                <Col xs="auto">
+                  <Badge
+                    bg={personasNum <= 20 ? 'success' : personasNum <= 30 ? 'warning' : 'danger'}
+                    className="fs-6"
+                  >
+                    {personasNum} {personasNum === 1 ? 'persona' : 'personas'}
+                  </Badge>
+                </Col>
+              )}
+            </Row>
+
+            <Form.Control.Feedback type="invalid" style={{ display: errores.personas ? 'block' : 'none' }}>
               {errores.personas}
             </Form.Control.Feedback>
-            
-            <div className="d-flex justify-content-between align-items-center mt-2">
-              <Form.Text className="text-muted">
-                <small>📊 Mínimo 1, máximo 40 personas</small>
-              </Form.Text>
-              
-              {formData.personas && (
-                <Badge 
-                  bg={formData.personas <= 20 ? 'success' : formData.personas <= 30 ? 'warning' : 'danger'}
-                  className="fs-6"
-                >
-                  {formData.personas} {formData.personas == 1 ? 'persona' : 'personas'}
-                </Badge>
-              )}
-            </div>
 
-            {/* Sugerencias de cantidad */}
             <div className="mt-3">
-              <small className="text-muted d-block mb-2">💡 Sugerencias rápidas:</small>
-              <ButtonGroup size="sm">
-                {[10, 15, 20, 25, 30, 40].map((cant) => (
+              <small className="text-muted d-block mb-2">⚡ Acceso rápido:</small>
+              <ButtonGroup size="sm" className="flex-wrap">
+                {[5, 10, 15, 20, 25, 30, 35, 40].map(cant => (
                   <Button
                     key={cant}
-                    variant={formData.personas == cant ? 'primary' : 'outline-primary'}
-                    onClick={() => handleChange({ target: { name: 'personas', value: cant } })}
-                    disabled={deshabilitado}
+                    type="button"
+                    variant={personasNum === cant ? 'primary' : 'outline-primary'}
+                    onClick={() => handlePersonasQuick(cant)}
                   >
                     {cant}
                   </Button>
                 ))}
               </ButtonGroup>
             </div>
+
+            <Form.Text className="text-muted d-block mt-2">
+              📊 Mínimo 1 persona · Máximo 40 personas
+              {personasNum > 0 && (
+                <span className="ms-2">
+                  · Capacidad usada: <strong>{Math.round((personasNum / 40) * 100)}%</strong>
+                </span>
+              )}
+            </Form.Text>
           </Form.Group>
         </Card.Body>
       </Card>
 
-      {/* Datos de contacto */}
-      <Card className="mb-4 border-info">
+      {/* ══════════════════════════════════════════
+          SECCIÓN 4 — Contacto
+      ══════════════════════════════════════════ */}
+      <Card className="mb-4 border-info shadow-sm">
         <Card.Header className="bg-info bg-opacity-10">
           <h5 className="mb-0 text-info">📞 Datos de Contacto</h5>
         </Card.Header>
@@ -392,123 +638,167 @@ const FormularioReserva = ({ onGuardar, deshabilitado }) => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label className="fw-bold">Email del Cliente</Form.Label>
-                <Form.Control
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="ejemplo@mail.com"
-                  isInvalid={!!errores.email}
-                  disabled={deshabilitado}
-                  size="lg"
-                />
-                <Form.Control.Feedback type="invalid">
-                  {errores.email}
-                </Form.Control.Feedback>
-                <Form.Text className="text-muted">
-                  <small>
-                    {formData.email 
-                      ? `✅ Se enviará confirmación a: ${formData.email}`
-                      : '📧 Si no se ingresa, se usará: bloqueo@funcity.com.ar'
-                    }
-                  </small>
+                <Form.Label className="fw-bold">
+                  Email del Cliente
+                  <span className="text-muted fw-normal ms-1" style={{ fontSize: '0.78rem' }}>(opcional)</span>
+                </Form.Label>
+                <div className="input-with-status">
+                  <Form.Control
+                    type="text"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="ejemplo@mail.com"
+                    isInvalid={!!errores.email}
+                    isValid={!!formData.email && !errores.email}
+                    size="lg"
+                    autoComplete="email"
+                    inputMode="email"
+                  />
+                  {!!formData.email && !errores.email && (
+                    <span className="field-valid-icon">✓</span>
+                  )}
+                </div>
+                <Form.Control.Feedback type="invalid">{errores.email}</Form.Control.Feedback>
+                <Form.Text className={formData.email && !errores.email ? 'text-success' : 'text-muted'}>
+                  {formData.email && !errores.email
+                    ? `✅ Email válido — se enviará confirmación`
+                    : '📧 Si no se ingresa, se usará bloqueo@funcity.com.ar'
+                  }
                 </Form.Text>
               </Form.Group>
             </Col>
 
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label className="fw-bold">Teléfono del Cliente</Form.Label>
-                <Form.Control
-                  type="tel"
-                  name="telefono"
-                  value={formData.telefono}
-                  onChange={handleChange}
-                  placeholder="Ej: 1123456789"
-                  isInvalid={!!errores.telefono}
-                  disabled={deshabilitado}
-                  size="lg"
-                />
-                <Form.Control.Feedback type="invalid">
-                  {errores.telefono}
-                </Form.Control.Feedback>
-                <Form.Text className="text-muted">
-                  <small>📱 Formato: 1123456789 (sin guiones ni espacios)</small>
+                <Form.Label className="fw-bold">
+                  Teléfono del Cliente
+                  <span className="text-muted fw-normal ms-1" style={{ fontSize: '0.78rem' }}>(opcional)</span>
+                </Form.Label>
+                <div className="input-with-status">
+                  <Form.Control
+                    type="tel"
+                    name="telefono"
+                    value={formData.telefono}
+                    onChange={handleChange}
+                    placeholder="Ej: 11 2345 6789"
+                    isInvalid={!!errores.telefono}
+                    isValid={!!formData.telefono && !errores.telefono && formData.telefono.replace(/\D/g,'').length >= 8}
+                    size="lg"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    maxLength={20}
+                  />
+                  {!!formData.telefono && !errores.telefono && formData.telefono.replace(/\D/g,'').length >= 8 && (
+                    <span className="field-valid-icon">✓</span>
+                  )}
+                </div>
+                <Form.Control.Feedback type="invalid">{errores.telefono}</Form.Control.Feedback>
+                <Form.Text className={formData.telefono && !errores.telefono ? 'text-success' : 'text-muted'}>
+                  {formData.telefono && !errores.telefono
+                    ? `✅ ${formData.telefono.replace(/\D/g,'').length} dígitos ingresados`
+                    : '📱 Solo números — Ej: 11 2345 6789 · +54 9 11 2345 6789'
+                  }
                 </Form.Text>
+
+                {/* Indicador visual de dígitos */}
+                {formData.telefono && (
+                  <div className="telefono-digits-indicator">
+                    <div
+                      className={`telefono-digits-bar ${
+                        errores.telefono ? 'bar-error' :
+                        formData.telefono.replace(/\D/g,'').length >= 8 ? 'bar-ok' : 'bar-warn'
+                      }`}
+                      style={{ width: `${Math.min(100, (formData.telefono.replace(/\D/g,'').length / 15) * 100)}%` }}
+                    />
+                    <span className="telefono-digits-count">
+                      {formData.telefono.replace(/\D/g,'').length} / 15 dígitos
+                    </span>
+                  </div>
+                )}
               </Form.Group>
             </Col>
           </Row>
+
+          <Form.Group>
+            <Form.Label className="fw-bold">Notas Adicionales</Form.Label>
+            <Form.Control
+              as="textarea"
+              name="notas"
+              value={formData.notas}
+              onChange={handleChange}
+              placeholder="Preferencias especiales, decoración, necesidades particulares..."
+              rows={3}
+              maxLength={500}
+            />
+            <Form.Text className="text-muted">{formData.notas.length}/500 caracteres</Form.Text>
+          </Form.Group>
         </Card.Body>
       </Card>
 
-      {/* Resumen de la reserva */}
-      {(formData.fecha && formData.hora_inicio && formData.personas) && (
+      {/* ── Resumen pre-envío ── */}
+      {formData.fecha && formData.hora_inicio && formData.personas && (
         <Alert variant="success" className="mb-4">
-          <h6 className="alert-heading">✨ Resumen de tu Reserva</h6>
+          <h6 className="alert-heading">✨ Resumen de la Reserva</h6>
           <hr />
           <Row>
             <Col md={6}>
-              <p className="mb-1">
-                <strong>👤 Niño/a:</strong> {formData.nombre_ninio || 'Sin especificar'}
-              </p>
-              <p className="mb-1">
-                <strong>📅 Fecha:</strong> {formatearFechaLegible(formData.fecha)}
-              </p>
-              <p className="mb-1">
-                <strong>🕐 Hora:</strong> {formData.hora_inicio}
-              </p>
+              <p className="mb-1"><strong>🎂 Festejado/a:</strong> {formData.nombre_ninio || <span className="text-muted">Sin especificar</span>}</p>
+              <p className="mb-1"><strong>📅 Fecha:</strong> {formatearFechaLegible(formData.fecha)}</p>
+              <p className="mb-1"><strong>🕐 Hora:</strong> {formData.hora_inicio}</p>
             </Col>
             <Col md={6}>
-              <p className="mb-1">
-                <strong>👥 Personas:</strong> {formData.personas}
-              </p>
-              <p className="mb-1">
-                <strong>🎨 Tema:</strong> {formData.tema || 'Sin especificar'}
-              </p>
-              <p className="mb-1">
-                <strong>📧 Email:</strong> {formData.email || 'bloqueo@funcity.com.ar'}
+              <p className="mb-1"><strong>👥 Personas:</strong> {formData.personas}</p>
+              <p className="mb-1"><strong>🎨 Tema:</strong> {formData.tema || <span className="text-muted">Sin especificar</span>}</p>
+              <p className="mb-1"><strong>💰 Precio:</strong>{' '}
+                <Badge bg="success">{finDeSemana ? '$28.000' : '$25.000'}</Badge>
               </p>
             </Col>
           </Row>
         </Alert>
       )}
 
-      {/* Botones de acción */}
-      <div className="d-grid gap-2 d-md-flex justify-content-md-end">
-        <Button 
-          variant="outline-secondary" 
-          type="button" 
-          onClick={handleReset}
-          disabled={deshabilitado}
-          size="lg"
-        >
-          🔄 Limpiar Formulario
-        </Button>
-        <Button 
-          variant="primary" 
+      {/* ── Botones ── */}
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div className="d-flex gap-2">
+          {modoEdicion && onCancelarEdicion && (
+            <Button variant="outline-secondary" type="button" onClick={onCancelarEdicion} disabled={enviando}>
+              ✕ Cancelar
+            </Button>
+          )}
+          <Button variant="outline-secondary" type="button" onClick={handleReset} disabled={enviando}>
+            🔄 Limpiar
+          </Button>
+        </div>
+
+        <Button
+          variant={modoEdicion ? 'warning' : 'primary'}
           type="submit"
-          disabled={deshabilitado}
           size="lg"
+          disabled={enviando || (dispEstado === 'ocupado' && !modoEdicion)}
         >
-          🎉 Crear Reserva
+          {enviando ? (
+            <><Spinner animation="border" size="sm" className="me-2" />Guardando...</>
+          ) : modoEdicion ? (
+            '💾 Actualizar Reserva'
+          ) : (
+            '🎉 Confirmar Reserva'
+          )}
         </Button>
       </div>
 
-      {/* Nota final */}
-      <Alert variant="light" className="mt-3 mb-0 border">
+      {/* ── Nota importante ── */}
+      <Alert variant="light" className="border mb-0">
         <small>
           <strong>📝 Importante:</strong>
-          <ul className="mb-0 mt-2">
-            <li>Los campos marcados con <span className="text-danger">*</span> son obligatorios</li>
-            <li>La reserva bloqueará el turno completo en el sistema Bookly</li>
-            <li>Recibirás confirmación inmediata de tu reserva</li>
-            <li>Para modificar una reserva, contacta al administrador</li>
+          <ul className="mb-0 mt-1">
+            <li>Los campos con <span className="text-danger">*</span> son obligatorios</li>
+            <li>La reserva bloqueará el turno en Bookly como «BLOQUEO - Cumple [nombre]»</li>
+            {modoEdicion && <li>Al actualizar se <strong>elimina la reserva anterior</strong> y se crea una nueva</li>}
           </ul>
         </small>
       </Alert>
     </Form>
-  
   );
 };
 

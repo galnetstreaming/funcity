@@ -1,484 +1,270 @@
 import { useState, useEffect } from 'react';
-import { Card, Alert, Button, Badge, ButtonGroup, Spinner, Row, Col, ProgressBar } from 'react-bootstrap';
-import { 
+import {
+  Card, Alert, Button, Badge, ButtonGroup,
+  Spinner, Row, Col, ProgressBar, Modal
+} from 'react-bootstrap';
+import {
   consultarDisponibilidadRango,
-  obtenerCumpleanosRegistrados
+  obtenerCumpleanosRegistrados,
+  obtenerHorariosDisponibles,
+  esFinDeSemana as esFDS,
 } from '../services/api';
 
+// ─────────────────────────────────────────────────────────────
+const DIAS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MESES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+const fmt = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
-const CalendarioDisponibilidad = () => {
-  const [vista, setVista] = useState('mes'); // 'dia', 'semana', 'mes'
-  const [fechaActual, setFechaActual] = useState(new Date());
-  const [consultando, setConsultando] = useState(false);
-  const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
-  const [disponibilidad, setDisponibilidad] = useState({});
+const esHoy    = (d) => d.toDateString() === new Date().toDateString();
+const esPasado = (d) => { const h = new Date(); h.setHours(0,0,0,0); return d < h; };
+
+// ─────────────────────────────────────────────────────────────
+const CalendarioDisponibilidad = ({ onIrAReservar }) => {
+  const [vista, setVista]                       = useState('mes');
+  const [fechaActual, setFechaActual]           = useState(new Date());
+  const [consultando, setConsultando]           = useState(false);
+  const [progreso, setProgreso]                 = useState({ actual: 0, total: 0 });
+  const [disponibilidad, setDisponibilidad]     = useState({});
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
-  const [cumpleanosRegistrados, setCumpleanosRegistrados] = useState({});
+  const [cumpleanos, setCumpleanos]             = useState({});
 
-  // Nombres de días y meses
-  const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
-  // Utilidades de fecha
-  const formatearFecha = (fecha) => {
-    const año = fecha.getFullYear();
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    return `${año}-${mes}-${dia}`;
-  };
-
-  const esFinDeSemana = (fecha) => {
-    const dia = fecha.getDay();
-    return dia === 0 || dia === 6;
-  };
-
-  const esHoy = (fecha) => {
-    const hoy = new Date();
-    return fecha.toDateString() === hoy.toDateString();
-  };
-
-  const esPasado = (fecha) => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    return fecha < hoy;
-  };
-
-  // Obtener días del mes
-  const obtenerDiasMes = (fecha) => {
-    const año = fecha.getFullYear();
-    const mes = fecha.getMonth();
-    const primerDia = new Date(año, mes, 1);
-    const ultimoDia = new Date(año, mes + 1, 0);
-    const diasMes = [];
-
-    // Días del mes anterior para completar la semana
-    const diaSemanaInicio = primerDia.getDay();
-    for (let i = diaSemanaInicio - 1; i >= 0; i--) {
-      const fecha = new Date(año, mes, -i);
-      diasMes.push({ fecha, mesActual: false });
-    }
-
-    // Días del mes actual
-    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-      diasMes.push({ fecha: new Date(año, mes, dia), mesActual: true });
-    }
-
-    // Días del siguiente mes para completar la última semana
-    const diasRestantes = 7 - (diasMes.length % 7);
-    if (diasRestantes < 7) {
-      for (let i = 1; i <= diasRestantes; i++) {
-        diasMes.push({ fecha: new Date(año, mes + 1, i), mesActual: false });
-      }
-    }
-
-    return diasMes;
-  };
-
-  // Obtener días de la semana
-  const obtenerDiasSemana = (fecha) => {
-    const dias = [];
-    const diaInicio = new Date(fecha);
-    diaInicio.setDate(fecha.getDate() - fecha.getDay()); // Ir al domingo
-
-    for (let i = 0; i < 7; i++) {
-      const dia = new Date(diaInicio);
-      dia.setDate(diaInicio.getDate() + i);
-      dias.push(dia);
-    }
-
+  // ── Obtener días del mes ──────────────────────────────────────
+  const getDiasMes = (fecha) => {
+    const y = fecha.getFullYear(), m = fecha.getMonth();
+    const primero = new Date(y, m, 1);
+    const ultimo  = new Date(y, m + 1, 0);
+    const dias    = [];
+    for (let i = primero.getDay() - 1; i >= 0; i--)
+      dias.push({ fecha: new Date(y, m, -i), mesActual: false });
+    for (let d = 1; d <= ultimo.getDate(); d++)
+      dias.push({ fecha: new Date(y, m, d), mesActual: true });
+    const rest = 7 - (dias.length % 7);
+    if (rest < 7) for (let i = 1; i <= rest; i++)
+      dias.push({ fecha: new Date(y, m + 1, i), mesActual: false });
     return dias;
   };
 
-  // Navegar fechas
-  const navegarMes = (direccion) => {
-    const nuevaFecha = new Date(fechaActual);
-    nuevaFecha.setMonth(fechaActual.getMonth() + direccion);
-    setFechaActual(nuevaFecha);
-  };
-
-  const navegarSemana = (direccion) => {
-    const nuevaFecha = new Date(fechaActual);
-    nuevaFecha.setDate(fechaActual.getDate() + (direccion * 7));
-    setFechaActual(nuevaFecha);
-  };
-
-  const navegarDia = (direccion) => {
-    const nuevaFecha = new Date(fechaActual);
-    nuevaFecha.setDate(fechaActual.getDate() + direccion);
-    setFechaActual(nuevaFecha);
-  };
-
-  const irHoy = () => {
-    setFechaActual(new Date());
-  };
-
-  // Cargar cumpleaños registrados
-const cargarCumpleanosRegistrados = async (fechaInicio, fechaFin) => {
-  try {
-    console.log(`📅 Cargando cumpleaños del ${formatearFecha(fechaInicio)} al ${formatearFecha(fechaFin)}`);
-    
-    const data = await obtenerCumpleanosRegistrados(
-      formatearFecha(fechaInicio),
-      formatearFecha(fechaFin)
-    );
-    
-    // Manejar diferentes formatos de respuesta
-    let cumpleanosArray = [];
-    
-    if (data && Array.isArray(data.cumpleanos)) {
-      // Nuevo formato: data.cumpleanos es un array
-      cumpleanosArray = data.cumpleanos;
-    } else if (Array.isArray(data)) {
-      // Formato antiguo: data es directamente un array
-      cumpleanosArray = data;
-    } else if (data && data.data) {
-      // Otro formato posible
-      cumpleanosArray = data.data || [];
-    }
-    
-    console.log(`📊 ${cumpleanosArray.length} cumpleaños recibidos`);
-    
-    const cumpleanosPorFecha = {};
-    cumpleanosArray.forEach(cumple => {
-      let fecha = '';
-      
-      // Extraer fecha de diferentes formatos
-      if (cumple.fecha) {
-        // Ya viene como YYYY-MM-DD o YYYY-MM-DD HH:MM:SS
-        fecha = cumple.fecha.split(' ')[0]; // Tomar solo la parte de la fecha
-      } else if (cumple.start_date) {
-        fecha = cumple.start_date.split(' ')[0];
-      } else if (cumple.inicio) {
-        fecha = cumple.inicio.split(' ')[0];
-      }
-      
-      if (fecha) {
-        if (!cumpleanosPorFecha[fecha]) {
-          cumpleanosPorFecha[fecha] = [];
-        }
-        
-        // Asegurar que tenga los campos necesarios
-        const cumpleFormateado = {
-          ...cumple,
-          fecha,
-          hora_inicio: cumple.hora || cumple.hora_inicio || '00:00',
-          nombre_ninio: cumple.nombre_ninio || cumple.nombre || 'Sin nombre',
-          tema: cumple.tema || 'Sin tema',
-          personas: cumple.personas || cumple.number_of_persons || 1
-        };
-        
-        cumpleanosPorFecha[fecha].push(cumpleFormateado);
-      }
+  const getDiasSemana = (fecha) => {
+    const inicio = new Date(fecha);
+    inicio.setDate(fecha.getDate() - fecha.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(inicio); d.setDate(inicio.getDate() + i); return d;
     });
-    
-    setCumpleanosRegistrados(cumpleanosPorFecha);
-    console.log(`✅ Cumpleaños cargados en ${Object.keys(cumpleanosPorFecha).length} fechas`);
-    
-  } catch (error) {
-    console.error('Error cargando cumpleaños:', error);
-    // No mostrar error al usuario, solo dejar el estado vacío
-    setCumpleanosRegistrados({});
-  }
-};
-
-  // Obtener horarios disponibles según el tipo de día
-  const obtenerHorariosDisponibles = (fecha) => {
-    const date = new Date(fecha);
-    const diaSemana = date.getDay();
-    const esFinDeSemana = diaSemana === 0 || diaSemana === 6;
-    
-    const horarios = esFinDeSemana 
-      ? ['10:30', '12:20', '14:10', '16:00']
-      : ['12:30', '14:20', '16:10'];
-
-    return {
-      horarios,
-      esFinDeSemana,
-      tipoDia: esFinDeSemana ? 'fin_de_semana' : 'semana'
-    };
   };
 
-  // Cargar cumpleaños cuando cambie la vista o fecha
+  // ── Navegar ───────────────────────────────────────────────────
+  const navegar = (dir) => {
+    const n = new Date(fechaActual);
+    if (vista === 'dia')    n.setDate(n.getDate() + dir);
+    else if (vista === 'semana') n.setDate(n.getDate() + dir * 7);
+    else n.setMonth(n.getMonth() + dir);
+    setFechaActual(n);
+  };
+
+  // ── Cargar cumpleaños al cambiar rango ────────────────────────
   useEffect(() => {
-    let fechaInicio, fechaFin;
-    
+    let inicio, fin;
     if (vista === 'mes') {
-      const primerDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-      const ultimoDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
-      fechaInicio = primerDia;
-      fechaFin = ultimoDia;
+      inicio = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
+      fin    = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
     } else if (vista === 'semana') {
-      const dias = obtenerDiasSemana(fechaActual);
-      fechaInicio = dias[0];
-      fechaFin = dias[6];
-    } else { // vista 'dia'
-      fechaInicio = fechaActual;
-      fechaFin = fechaActual;
+      const ds = getDiasSemana(fechaActual);
+      inicio = ds[0]; fin = ds[6];
+    } else {
+      inicio = fin = fechaActual;
     }
-    
-    cargarCumpleanosRegistrados(fechaInicio, fechaFin);
+
+    obtenerCumpleanosRegistrados(fmt(inicio), fmt(fin))
+      .then(data => {
+        const arr = Array.isArray(data.cumpleanos) ? data.cumpleanos
+          : Array.isArray(data) ? data : [];
+        const porFecha = {};
+        arr.forEach(c => {
+          const f = (c.fecha || c.start_date || '').split(' ')[0];
+          if (f) {
+            if (!porFecha[f]) porFecha[f] = [];
+            porFecha[f].push({
+              ...c,
+              hora_inicio:  c.hora || c.hora_inicio || '00:00',
+              nombre_ninio: c.nombre_ninio || c.nombre || 'Sin nombre',
+            });
+          }
+        });
+        setCumpleanos(porFecha);
+      })
+      .catch(() => setCumpleanos({}));
   }, [fechaActual, vista]);
 
-  // Consultar disponibilidad según la vista actual
-const consultarVistaActual = async () => {
-  setConsultando(true);
-  setProgreso({ actual: 0, total: 0 });
-
-  try {
-    let fechasAConsultar = [];
-    
-    if (vista === 'dia') {
-      if (!esPasado(fechaActual)) {
-        fechasAConsultar = [fechaActual];
-      }
-    } else if (vista === 'semana') {
-      fechasAConsultar = obtenerDiasSemana(fechaActual).filter(f => !esPasado(f));
-    } else if (vista === 'mes') {
-      fechasAConsultar = obtenerDiasMes(fechaActual)
-        .filter(d => d.mesActual && !esPasado(d.fecha))
-        .map(d => d.fecha);
-    }
-
-    if (fechasAConsultar.length === 0) {
-      alert('No hay fechas futuras para consultar en este rango.');
-      return;
-    }
-
-    // Preparar consultas con horarios correspondientes
-    const consultasAHacer = fechasAConsultar.map(fecha => {
-      const { horarios } = obtenerHorariosDisponibles(fecha);
-      return { 
-        fecha: formatearFecha(fecha), 
-        horarios: horarios || [] 
-      };
-    }).filter(consulta => consulta.horarios.length > 0);
-
-    if (consultasAHacer.length === 0) {
-      alert('No hay horarios disponibles para consultar en las fechas seleccionadas.');
-      return;
-    }
-
-    console.log(`🔍 Consultando ${consultasAHacer.length} fechas...`);
-    setProgreso({ actual: 0, total: consultasAHacer.length });
-
-    // Usar la función correcta de la API
-    const resultados = await consultarDisponibilidadRango(
-      consultasAHacer,
-      (actual, total) => setProgreso({ actual, total })
-    );
-
-    // Actualizar estado con resultados
-    const nuevoEstado = {};
-    resultados.forEach(resultado => {
-      if (resultado && resultado.fecha) {
-        nuevoEstado[resultado.fecha] = resultado;
-      }
-    });
-
-    setDisponibilidad(prev => ({ ...prev, ...nuevoEstado }));
-    setUltimaActualizacion(new Date());
-    console.log(`✅ Disponibilidad actualizada: ${Object.keys(nuevoEstado).length} fechas`);
-
-  } catch (error) {
-    console.error('Error al consultar disponibilidad:', error);
-    alert(`Error al consultar disponibilidad: ${error.message}. 
-           Por favor intenta nuevamente o contacta con soporte.`);
-  } finally {
-    setConsultando(false);
+  // ── Consultar disponibilidad ──────────────────────────────────
+  const consultarVistaActual = async () => {
+    setConsultando(true);
     setProgreso({ actual: 0, total: 0 });
-  }
-};
 
-  // Refrescar cache
-  const refrescarCache = () => {
-    // limpiarCacheDisponibilidad(); // Si existe esta función
+    try {
+      let fechas = [];
+      if (vista === 'dia') {
+        if (!esPasado(fechaActual)) fechas = [fechaActual];
+      } else if (vista === 'semana') {
+        fechas = getDiasSemana(fechaActual).filter(f => !esPasado(f));
+      } else {
+        fechas = getDiasMes(fechaActual).filter(d => d.mesActual && !esPasado(d.fecha)).map(d => d.fecha);
+      }
+
+      if (fechas.length === 0) {
+        alert('No hay fechas futuras para consultar en este rango.');
+        return;
+      }
+
+      const consultas = fechas.map(f => ({
+        fecha:    fmt(f),
+        horarios: obtenerHorariosDisponibles(fmt(f)).horarios,
+      }));
+
+      setProgreso({ actual: 0, total: consultas.length });
+
+      const resultados = await consultarDisponibilidadRango(
+        consultas,
+        (actual, total) => setProgreso({ actual, total })
+      );
+
+      const nuevo = {};
+      resultados.forEach(r => { if (r?.fecha) nuevo[r.fecha] = r; });
+      setDisponibilidad(prev => ({ ...prev, ...nuevo }));
+      setUltimaActualizacion(new Date());
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setConsultando(false);
+      setProgreso({ actual: 0, total: 0 });
+    }
+  };
+
+  const refrescar = () => {
     setDisponibilidad({});
     setUltimaActualizacion(null);
-    // Recargar cumpleaños también
-    let fechaInicio, fechaFin;
-    if (vista === 'mes') {
-      const primerDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-      const ultimoDia = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
-      fechaInicio = primerDia;
-      fechaFin = ultimoDia;
-    } else if (vista === 'semana') {
-      const dias = obtenerDiasSemana(fechaActual);
-      fechaInicio = dias[0];
-      fechaFin = dias[6];
-    } else {
-      fechaInicio = fechaActual;
-      fechaFin = fechaActual;
-    }
-    cargarCumpleanosRegistrados(fechaInicio, fechaFin);
   };
 
-  // Obtener badge de disponibilidad para una fecha
-  const obtenerBadgeDisponibilidad = (fecha) => {
-    const fechaStr = formatearFecha(fecha);
-    const info = disponibilidad[fechaStr];
-
+  // ── Badge de disponibilidad ───────────────────────────────────
+  const badgeDisp = (fecha) => {
+    const info = disponibilidad[fmt(fecha)];
     if (!info) return null;
-
-    const { disponibles, ocupados, errores } = info.resumen;
-
-    if (errores > 0) {
-      return <Badge bg="secondary" className="w-100 mt-1">⚠ Error</Badge>;
-    } else if (disponibles === info.resumen.total) {
-      return <Badge bg="success" className="w-100 mt-1">✓ {disponibles}/{info.resumen.total}</Badge>;
-    } else if (disponibles > 0) {
-      return <Badge bg="warning" text="dark" className="w-100 mt-1">⚠ {disponibles}/{info.resumen.total}</Badge>;
-    } else {
-      return <Badge bg="danger" className="w-100 mt-1">✗ Ocupado</Badge>;
-    }
+    const { disponibles, ocupados, errores, total } = info.resumen;
+    if (errores === total) return <Badge bg="secondary" className="w-100 mt-1 d-block">⚠ Error</Badge>;
+    if (disponibles === total) return <Badge bg="success"  className="w-100 mt-1 d-block">✓ {disponibles}/{total}</Badge>;
+    if (disponibles > 0) return <Badge bg="warning" text="dark" className="w-100 mt-1 d-block">⚡ {disponibles}/{total}</Badge>;
+    return <Badge bg="danger" className="w-100 mt-1 d-block">✗ Lleno</Badge>;
   };
 
-  // Renderizar cumpleaños del día
-  const renderCumpleanosDelDia = (fecha) => {
-    const fechaStr = formatearFecha(fecha);
-    const cumpleanosDia = cumpleanosRegistrados[fechaStr];
-    
-    if (!cumpleanosDia || cumpleanosDia.length === 0) {
-      return null;
-    }
-
-    return (
-      <div className="mt-1">
-        {cumpleanosDia.map((cumple, index) => (
-          <div key={index} className="small text-primary mb-1">
-            🎂 {cumple.nombre_ninio || 'Cumple'} ({cumple.hora_inicio})
-            {cumple.tema && <div className="text-muted ultra-small">{cumple.tema}</div>}
-          </div>
-        ))}
+  // ── Cumpleaños del día ────────────────────────────────────────
+  const cumpleDia = (fecha) => {
+    const arr = cumpleanos[fmt(fecha)];
+    if (!arr?.length) return null;
+    return arr.map((c, i) => (
+      <div key={i} className="small text-primary mt-1" style={{ fontSize: '0.7rem' }}>
+        🎂 {c.nombre_ninio} ({c.hora_inicio})
       </div>
-    );
+    ));
   };
 
-  // Renderizar vista de mes
-  const renderVistaMes = () => {
-    const dias = obtenerDiasMes(fechaActual);
+  // ── Título de navegación ──────────────────────────────────────
+  const tituloNav = () => {
+    if (vista === 'dia')    return `${DIAS[fechaActual.getDay()]}, ${fechaActual.getDate()} de ${MESES[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
+    if (vista === 'semana') return `Semana del ${fechaActual.getDate()} de ${MESES[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
+    return `${MESES[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
+  };
 
+  // ─────────────────────────────────────────────────────────────
+  //  Renders de vista
+  // ─────────────────────────────────────────────────────────────
+
+  const renderMes = () => {
+    const dias = getDiasMes(fechaActual);
     return (
-      <div>
-        {/* Encabezado días de la semana */}
-        <Row className="text-center fw-bold border-bottom mb-2 pb-2">
-          {diasSemana.map(dia => (
-            <Col key={dia} className="p-1">
-              {dia}
-            </Col>
-          ))}
+      <>
+        <Row className="text-center fw-bold border-bottom mb-2 pb-1 g-1">
+          {DIAS.map(d => <Col key={d} style={{ fontSize: '0.8rem', color: '#6c757d' }}>{d}</Col>)}
         </Row>
-
-        {/* Grid de días */}
-        <div>
-          {Array.from({ length: Math.ceil(dias.length / 7) }).map((_, semanaIdx) => (
-            <Row key={semanaIdx} className="g-2 mb-2">
-              {dias.slice(semanaIdx * 7, (semanaIdx + 1) * 7).map((diaObj, idx) => {
-                const { fecha, mesActual } = diaObj;
-                const pasado = esPasado(fecha);
-                const hoy = esHoy(fecha);
-
-                return (
-                  <Col key={idx}>
-                    <Card 
-                      className={`
-                        text-center h-100
-                        ${!mesActual ? 'opacity-50' : ''}
-                        ${pasado ? 'bg-light' : ''}
-                        ${hoy ? 'border-primary border-2' : ''}
-                        ${!pasado && mesActual ? 'cursor-pointer' : ''}
-                      `}
-                      onClick={() => !pasado && mesActual && setFechaSeleccionada(fecha)}
-                      style={{ cursor: !pasado && mesActual ? 'pointer' : 'default' }}
-                    >
-                      <Card.Body className="p-2">
-                        <div className="fw-bold">
-                          {fecha.getDate()}
-                          {hoy && <Badge bg="primary" className="ms-1" style={{ fontSize: '0.6rem' }}>📍</Badge>}
-                        </div>
-                        {!pasado && mesActual && obtenerBadgeDisponibilidad(fecha)}
-                        
-                        {/* Mostrar cumpleaños del día */}
-                        {!pasado && mesActual && renderCumpleanosDelDia(fecha)}
-                        
-                        {pasado && <small className="text-muted">Pasado</small>}
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                );
-              })}
-            </Row>
-          ))}
-        </div>
-      </div>
+        {Array.from({ length: Math.ceil(dias.length / 7) }).map((_, si) => (
+          <Row key={si} className="g-1 mb-1">
+            {dias.slice(si * 7, si * 7 + 7).map(({ fecha, mesActual }, idx) => {
+              const pasado = esPasado(fecha), hoy = esHoy(fecha);
+              return (
+                <Col key={idx}>
+                  <div
+                    className={[
+                      'border rounded p-1 text-center',
+                      !mesActual ? 'opacity-25' : '',
+                      pasado ? 'bg-light' : '',
+                      hoy ? 'border-primary border-2' : '',
+                    ].join(' ')}
+                    style={{ minHeight: 64, cursor: !pasado && mesActual ? 'pointer' : 'default' }}
+                    onClick={() => !pasado && mesActual && setFechaSeleccionada(fecha)}
+                  >
+                    <div className="fw-bold" style={{ fontSize: '0.85rem' }}>
+                      {fecha.getDate()}
+                      {hoy && <span className="ms-1" style={{ fontSize: '0.6rem' }}>◉</span>}
+                    </div>
+                    {!pasado && mesActual && badgeDisp(fecha)}
+                    {!pasado && mesActual && cumpleDia(fecha)}
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        ))}
+      </>
     );
   };
 
-  // Renderizar vista de semana
-  const renderVistaSemana = () => {
-    const dias = obtenerDiasSemana(fechaActual);
-
+  const renderSemana = () => {
+    const dias = getDiasSemana(fechaActual);
     return (
-      <Row className="g-3">
+      <Row className="g-2">
         {dias.map((fecha, idx) => {
-          const fechaStr = formatearFecha(fecha);
-          const info = disponibilidad[fechaStr];
-          const pasado = esPasado(fecha);
-          const hoy = esHoy(fecha);
-
+          const info = disponibilidad[fmt(fecha)];
+          const pasado = esPasado(fecha), hoy = esHoy(fecha);
           return (
-            <Col key={idx} xs={12} md={6} lg={4}>
-              <Card 
-                className={`
-                  h-100
-                  ${pasado ? 'bg-light' : ''}
-                  ${hoy ? 'border-primary border-2' : ''}
-                `}
-              >
-                <Card.Header className={hoy ? 'bg-primary text-white' : ''}>
-                  <h6 className="mb-0">
-                    {diasSemana[fecha.getDay()]} {fecha.getDate()}
-                    {hoy && ' 📍'}
-                  </h6>
-                  <small>{esFinDeSemana(fecha) ? 'Fin de semana' : 'Entre semana'}</small>
+            <Col key={idx} xs={12} sm={6} md={4} lg={3}>
+              <Card className={`h-100 ${hoy ? 'border-primary border-2' : ''}`}>
+                <Card.Header className={`py-2 ${hoy ? 'bg-primary text-white' : ''}`}>
+                  <div className="fw-bold" style={{ fontSize: '0.9rem' }}>
+                    {DIAS[fecha.getDay()]} {fecha.getDate()} {hoy && '📍'}
+                  </div>
+                  <small className={hoy ? 'opacity-75' : 'text-muted'}>
+                    {esFDS(fmt(fecha)) ? 'Fin de semana' : 'Entre semana'}
+                  </small>
                 </Card.Header>
-                <Card.Body>
+                <Card.Body className="p-2">
                   {pasado ? (
-                    <p className="text-muted mb-0">Fecha pasada</p>
+                    <small className="text-muted">Pasado</small>
                   ) : info ? (
-                    <div>
-                      <div className="mb-2">
+                    <>
+                      <div className="mb-1">
                         <Badge bg="success" className="me-1">✓ {info.resumen.disponibles}</Badge>
-                        <Badge bg="danger" className="me-1">✗ {info.resumen.ocupados}</Badge>
-                        {info.resumen.errores > 0 && (
-                          <Badge bg="secondary">⚠ {info.resumen.errores}</Badge>
-                        )}
+                        <Badge bg="danger">✗ {info.resumen.ocupados}</Badge>
                       </div>
-                      
-                      {/* Mostrar cumpleaños del día */}
-                      {renderCumpleanosDelDia(fecha)}
-                      
-                      <div className="small">
-                        {info.horarios.map((h, i) => (
-                          <div key={i} className="d-flex justify-content-between mb-1">
-                            <span>{h.hora}</span>
-                            {h.disponible === true && <Badge bg="success" pill>✓</Badge>}
-                            {h.disponible === false && <Badge bg="danger" pill>✗</Badge>}
-                            {h.disponible === null && <Badge bg="secondary" pill>?</Badge>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                      {info.horarios.map((h, i) => (
+                        <div key={i} className="d-flex justify-content-between align-items-center mb-1">
+                          <small className="font-monospace">{h.hora}</small>
+                          {h.disponible === true  && <Badge bg="success" pill>✓</Badge>}
+                          {h.disponible === false && <Badge bg="danger"  pill>✗</Badge>}
+                          {h.disponible === null  && <Badge bg="secondary" pill>?</Badge>}
+                        </div>
+                      ))}
+                      {cumpleDia(fecha)}
+                    </>
                   ) : (
-                    <div>
-                      <p className="text-muted mb-0 small">Sin consultar</p>
-                      {/* Mostrar cumpleaños incluso si no se consultó disponibilidad */}
-                      {renderCumpleanosDelDia(fecha)}
-                    </div>
+                    <>
+                      <small className="text-muted">Sin consultar</small>
+                      {cumpleDia(fecha)}
+                    </>
                   )}
                 </Card.Body>
               </Card>
@@ -489,325 +275,248 @@ const consultarVistaActual = async () => {
     );
   };
 
-  // Renderizar vista de día
-  const renderVistaDia = () => {
-    const fechaStr = formatearFecha(fechaActual);
+  const renderDia = () => {
+    const fechaStr = fmt(fechaActual);
     const info = disponibilidad[fechaStr];
-    const { horarios: horariosConfig } = obtenerHorariosDisponibles(fechaActual);
+    const { horarios } = obtenerHorariosDisponibles(fechaStr);
 
     return (
-      <div>
-        <Alert variant="light" className="text-center mb-4">
-          <h4>
-            {diasSemana[fechaActual.getDay()]}, {fechaActual.getDate()} de {meses[fechaActual.getMonth()]} de {fechaActual.getFullYear()}
-          </h4>
-          <Badge bg="secondary">
-            {esFinDeSemana(fechaActual) ? 'Fin de Semana' : 'Entre Semana'}
+      <>
+        <Alert variant="light" className="text-center mb-3 border">
+          <h5 className="mb-1">
+            {DIAS[fechaActual.getDay()]}, {fechaActual.getDate()} de {MESES[fechaActual.getMonth()]} de {fechaActual.getFullYear()}
+          </h5>
+          <Badge bg={esFDS(fechaStr) ? 'primary' : 'secondary'}>
+            {esFDS(fechaStr) ? 'Fin de Semana — $28.000' : 'Entre Semana — $25.000'}
           </Badge>
         </Alert>
 
-        {/* Mostrar cumpleaños del día en vista día */}
-        {renderCumpleanosDelDia(fechaActual) && (
+        {cumpleanos[fechaStr]?.length > 0 && (
           <Alert variant="info" className="mb-3">
-            <h6>🎂 Cumpleaños Registrados para este día:</h6>
-            {renderCumpleanosDelDia(fechaActual)}
+            <strong>🎂 Cumpleaños registrados hoy:</strong>
+            {cumpleanos[fechaStr].map((c, i) => (
+              <div key={i} className="mt-1">
+                <Badge bg="info" className="me-2">{c.hora_inicio}</Badge>
+                <strong>{c.nombre_ninio}</strong>
+                {c.tema && <small className="text-muted ms-2">— {c.tema}</small>}
+              </div>
+            ))}
           </Alert>
         )}
 
-        <div className="d-grid gap-3">
-          {horariosConfig.map((hora, idx) => {
-            const horarioInfo = info?.horarios.find(h => h.hora === hora);
+        <div className="d-grid gap-2">
+          {horarios.map((hora, idx) => {
+            const horInfo = info?.horarios.find(h => h.hora === hora);
+            let variant = 'light', badgeEl = null;
+            if (horInfo?.disponible === true)  { variant = 'success'; badgeEl = <Badge bg="success">✓ Disponible</Badge>; }
+            if (horInfo?.disponible === false) { variant = 'danger';  badgeEl = <Badge bg="danger">✗ Ocupado</Badge>; }
+            if (horInfo?.disponible === null)  { variant = 'warning'; badgeEl = <Badge bg="warning" text="dark">⚠ Error</Badge>; }
+            if (!horInfo) badgeEl = <Badge bg="secondary">Sin consultar</Badge>;
 
             return (
-              <Card 
-                key={idx}
-                className={`
-                  border-2
-                  ${horarioInfo?.disponible === true ? 'border-success' : ''}
-                  ${horarioInfo?.disponible === false ? 'border-danger' : ''}
-                `}
-              >
-                <Card.Body className="p-4">
-                  <Row className="align-items-center">
-                    <Col xs={3} className="text-center">
-                      <h2 className="mb-0">🕐</h2>
-                      <h4 className="mb-0">{hora}</h4>
-                    </Col>
-                    <Col xs={9}>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h5 className="mb-1">Turno de {hora}</h5>
-                          <small className="text-muted">
-                            Duración: 1h 30min | 
-                            Precio: {esFinDeSemana(fechaActual) ? '$28,000' : '$25,000'}
-                          </small>
-                          {horarioInfo?.motivo && (
-                            <div className="mt-1">
-                              <small className="text-muted">
-                                {horarioInfo.mensaje}
-                              </small>
-                            </div>
-                          )}
+              <Card key={idx} className={`border-${variant}`}>
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h5 className="mb-0 font-monospace">{hora}</h5>
+                      <small className="text-muted">Duración: 1h 50min</small>
+                    </div>
+                    <div className="text-end">
+                      {badgeEl}
+                      {horInfo?.disponible === true && onIrAReservar && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline-success"
+                            onClick={() => onIrAReservar(fechaStr, hora)}
+                          >
+                            Reservar →
+                          </Button>
                         </div>
-                        <div>
-                          {horarioInfo?.disponible === true && (
-                            <Badge bg="success" className="fs-6 px-3 py-2">
-                              ✓ Disponible
-                            </Badge>
-                          )}
-                          {horarioInfo?.disponible === false && (
-                            <Badge bg="danger" className="fs-6 px-3 py-2">
-                              ✗ {horarioInfo.motivo === 'slot_ocupado' ? 'Ocupado' : 'No disponible'}
-                            </Badge>
-                          )}
-                          {horarioInfo?.disponible === null && (
-                            <Badge bg="warning" text="dark" className="fs-6 px-3 py-2">
-                              ⚠ Error de consulta
-                            </Badge>
-                          )}
-                          {!horarioInfo && (
-                            <Badge bg="secondary" className="fs-6 px-3 py-2">
-                              Sin consultar
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </Col>
-                  </Row>
+                      )}
+                    </div>
+                  </div>
                 </Card.Body>
               </Card>
             );
           })}
         </div>
-      </div>
+      </>
     );
   };
 
-  // Modal de detalles de fecha seleccionada
-  const renderDetallesFecha = () => {
+  // ── Modal detalles fecha ──────────────────────────────────────
+  const renderModalFecha = () => {
     if (!fechaSeleccionada) return null;
-
-    const fechaStr = formatearFecha(fechaSeleccionada);
-    const info = disponibilidad[fechaStr];
+    const fs   = fmt(fechaSeleccionada);
+    const info = disponibilidad[fs];
+    const { horarios } = obtenerHorariosDisponibles(fs);
 
     return (
-      <Alert variant="info" className="mt-3" onClose={() => setFechaSeleccionada(null)} dismissible>
-        <h5>
-          {diasSemana[fechaSeleccionada.getDay()]}, {fechaSeleccionada.getDate()} de {meses[fechaSeleccionada.getMonth()]}
-        </h5>
-        
-        {/* Mostrar cumpleaños en el modal de detalles */}
-        {renderCumpleanosDelDia(fechaSeleccionada) && (
-          <div className="mb-3">
-            <h6>🎂 Cumpleaños Registrados:</h6>
-            {renderCumpleanosDelDia(fechaSeleccionada)}
-          </div>
-        )}
-        
-        {info ? (
-          <div>
-            <div className="mb-2">
-              <Badge bg="success" className="me-2">✓ {info.resumen.disponibles} disponibles</Badge>
-              <Badge bg="danger" className="me-2">✗ {info.resumen.ocupados} ocupados</Badge>
-              {info.resumen.errores > 0 && (
-                <Badge bg="warning" text="dark">⚠ {info.resumen.errores} errores</Badge>
-              )}
-            </div>
-            <div className="mt-3">
+      <Modal show={!!fechaSeleccionada} onHide={() => setFechaSeleccionada(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {DIAS[fechaSeleccionada.getDay()]}, {fechaSeleccionada.getDate()} de {MESES[fechaSeleccionada.getMonth()]}
+            {' '}
+            <Badge bg={esFDS(fs) ? 'primary' : 'secondary'} style={{ fontSize: '0.7rem' }}>
+              {esFDS(fs) ? 'Fin de semana' : 'Entre semana'}
+            </Badge>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {cumpleanos[fs]?.length > 0 && (
+            <Alert variant="info" className="mb-3">
+              <strong>🎂 Cumpleaños:</strong>
+              {cumpleanos[fs].map((c, i) => (
+                <div key={i}><Badge bg="info" className="me-1">{c.hora_inicio}</Badge>{c.nombre_ninio}</div>
+              ))}
+            </Alert>
+          )}
+          {info ? (
+            <>
+              <div className="d-flex gap-2 mb-3">
+                <Badge bg="success">✓ {info.resumen.disponibles} disponibles</Badge>
+                <Badge bg="danger">✗ {info.resumen.ocupados} ocupados</Badge>
+              </div>
               {info.horarios.map((h, i) => (
-                <div key={i} className="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
-                  <div>
-                    <strong>{h.hora}</strong>
-                    {h.mensaje && (
-                      <div className="small text-muted">{h.mensaje}</div>
+                <div key={i} className="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                  <strong className="font-monospace">{h.hora}</strong>
+                  <div className="d-flex align-items-center gap-2">
+                    {h.disponible === true  && <Badge bg="success">✓ Disponible</Badge>}
+                    {h.disponible === false && <Badge bg="danger">✗ Ocupado</Badge>}
+                    {h.disponible === null  && <Badge bg="warning" text="dark">⚠ Error</Badge>}
+                    {h.disponible === true && onIrAReservar && (
+                      <Button size="sm" variant="outline-success"
+                        onClick={() => { setFechaSeleccionada(null); onIrAReservar(fs, h.hora); }}>
+                        Reservar
+                      </Button>
                     )}
                   </div>
-                  {h.disponible === true && <Badge bg="success">✓ Disponible</Badge>}
-                  {h.disponible === false && <Badge bg="danger">✗ {h.motivo === 'slot_ocupado' ? 'Ocupado' : 'No disponible'}</Badge>}
-                  {h.disponible === null && <Badge bg="warning" text="dark">⚠ Error</Badge>}
                 </div>
               ))}
-            </div>
-          </div>
-        ) : (
-          <p className="mb-0">No hay datos de disponibilidad para esta fecha. Presiona "Consultar Disponibilidad".</p>
-        )}
-      </Alert>
+            </>
+          ) : (
+            <>
+              <p className="text-muted mb-3">Consultá la disponibilidad para ver los horarios disponibles.</p>
+              {horarios.map((h, i) => (
+                <div key={i} className="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                  <strong className="font-monospace">{h}</strong>
+                  <div className="d-flex align-items-center gap-2">
+                    <Badge bg="secondary">Sin consultar</Badge>
+                    {onIrAReservar && (
+                      <Button size="sm" variant="outline-primary"
+                        onClick={() => { setFechaSeleccionada(null); onIrAReservar(fs, h); }}>
+                        Reservar →
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setFechaSeleccionada(null)}>Cerrar</Button>
+        </Modal.Footer>
+      </Modal>
     );
   };
 
+  // ─────────────────────────────────────────────────────────────
+  //  RENDER PRINCIPAL
+  // ─────────────────────────────────────────────────────────────
   return (
+    <>
+      {renderModalFecha()}
 
-    <Card className="mb-4 border-info">
-      <Card.Header className="bg-info bg-opacity-10">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <h5 className="mb-0 text-info">📅 Consulta de Disponibilidad - Fun City</h5>
-          <ButtonGroup size="sm">
-            <Button 
-              variant={vista === 'dia' ? 'info' : 'outline-info'}
-              onClick={() => setVista('dia')}
-            >
-              Día
-            </Button>
-            <Button 
-              variant={vista === 'semana' ? 'info' : 'outline-info'}
-              onClick={() => setVista('semana')}
-            >
-              Semana
-            </Button>
-            <Button 
-              variant={vista === 'mes' ? 'info' : 'outline-info'}
-              onClick={() => setVista('mes')}
-            >
-              Mes
-            </Button>
-          </ButtonGroup>
-        </div>
-      </Card.Header>
+      <Card className="shadow-sm border-info">
+        <Card.Header className="bg-info bg-opacity-10">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 className="mb-0 text-info">📅 Consulta de Disponibilidad</h5>
+            <ButtonGroup size="sm">
+              {['dia', 'semana', 'mes'].map(v => (
+                <Button key={v} variant={vista === v ? 'info' : 'outline-info'} onClick={() => setVista(v)}>
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </Button>
+              ))}
+            </ButtonGroup>
+          </div>
+        </Card.Header>
 
-      <Card.Body>
-        {/* Controles de navegación */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <Button 
-            variant="outline-primary" 
-            size="sm"
-            onClick={() => {
-              if (vista === 'dia') navegarDia(-1);
-              else if (vista === 'semana') navegarSemana(-1);
-              else navegarMes(-1);
-            }}
-          >
-            ← Anterior
-          </Button>
+        <Card.Body>
+          {/* ── Navegación ── */}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <Button variant="outline-primary" size="sm" onClick={() => navegar(-1)}>← Anterior</Button>
+            <div className="text-center">
+              <h5 className="mb-0">{tituloNav()}</h5>
+              <Button variant="link" size="sm" className="p-0" onClick={() => setFechaActual(new Date())}>Hoy</Button>
+            </div>
+            <Button variant="outline-primary" size="sm" onClick={() => navegar(1)}>Siguiente →</Button>
+          </div>
 
-          <div className="text-center">
-            <h4 className="mb-1">
-              {vista === 'dia' && `${diasSemana[fechaActual.getDay()]}, ${fechaActual.getDate()}`}
-              {vista === 'semana' && `Semana del ${fechaActual.getDate()}`}
-              {vista === 'mes' && meses[fechaActual.getMonth()]}
-              {' '}
-              {vista !== 'mes' && meses[fechaActual.getMonth()]}
-              {' '}
-              {fechaActual.getFullYear()}
-            </h4>
-            <Button variant="link" size="sm" onClick={irHoy}>
-              Hoy
+          {/* ── Botones de consulta ── */}
+          <div className="d-flex flex-wrap gap-2 justify-content-center mb-3">
+            <Button variant="info" onClick={consultarVistaActual} disabled={consultando} size="lg">
+              {consultando
+                ? <><Spinner animation="border" size="sm" className="me-2" />Consultando...</>
+                : '🔍 Consultar Disponibilidad'
+              }
+            </Button>
+            <Button variant="outline-secondary" onClick={refrescar} disabled={consultando}>
+              🔄 Limpiar
             </Button>
           </div>
 
-          <Button 
-            variant="outline-primary" 
-            size="sm"
-            onClick={() => {
-              if (vista === 'dia') navegarDia(1);
-              else if (vista === 'semana') navegarSemana(1);
-              else navegarMes(1);
-            }}
-          >
-            Siguiente →
-          </Button>
-        </div>
-
-        {/* Botones de acción */}
-        <div className="text-center mb-4">
-          <div className="d-flex gap-2 justify-content-center flex-wrap">
-            <Button 
-              variant="info"
-              onClick={consultarVistaActual}
-              disabled={consultando}
-              size="lg"
-            >
-              {consultando ? (
-                <>
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  Consultando...
-                </>
-              ) : (
-                <>
-                  🔍 Consultar Disponibilidad
-                </>
-              )}
-            </Button>
-            
-            <Button 
-              variant="outline-secondary"
-              onClick={refrescarCache}
-              disabled={consultando}
-              title="Limpiar cache y recargar datos"
-            >
-              🔄 Refrescar
-            </Button>
-          </div>
-          
-          {/* Barra de progreso */}
+          {/* ── Progreso ── */}
           {consultando && progreso.total > 0 && (
-            <div className="mt-3">
-              <ProgressBar 
-                now={(progreso.actual / progreso.total) * 100} 
-                label={`${progreso.actual}/${progreso.total}`}
-                animated
+            <div className="mb-3">
+              <ProgressBar
+                now={(progreso.actual / progreso.total) * 100}
+                label={`${progreso.actual}/${progreso.total} fechas`}
+                animated striped
               />
             </div>
           )}
-          
-          <div className="mt-2">
-            <small className="text-muted">
-              {vista === 'dia' && 'Consulta 1 día'}
-              {vista === 'semana' && 'Consulta hasta 7 días'}
-              {vista === 'mes' && `Consulta hasta ${obtenerDiasMes(fechaActual).filter(d => d.mesActual && !esPasado(d.fecha)).length} días`}
-            </small>
-          </div>
-          
+
           {ultimaActualizacion && (
-            <div className="mt-1">
+            <div className="text-center mb-3">
               <small className="text-muted">
-                Última actualización: {ultimaActualizacion.toLocaleTimeString()}
+                Última actualización: {ultimaActualizacion.toLocaleTimeString('es-AR')}
               </small>
             </div>
           )}
-        </div>
 
-        {/* Leyenda */}
-        <Alert variant="light" className="mb-3">
-          <small className="d-flex justify-content-around flex-wrap gap-2">
-            <span><Badge bg="success">✓</Badge> Disponible</span>
-            <span><Badge bg="warning" text="dark">⚠</Badge> Parcialmente disponible</span>
-            <span><Badge bg="danger">✗</Badge> Ocupado/Bloqueado</span>
-            <span><Badge bg="secondary">?</Badge> Error de consulta</span>
-            <span><Badge bg="primary">📍</Badge> Hoy</span>
-            <span><Badge bg="info">🎂</Badge> Cumpleaños registrado</span>
-          </small>
-        </Alert>
+          {/* ── Leyenda ── */}
+          <Alert variant="light" className="py-2 mb-3">
+            <div className="d-flex justify-content-around flex-wrap gap-2">
+              <small><Badge bg="success">✓</Badge> Disponible</small>
+              <small><Badge bg="warning" text="dark">⚡</Badge> Parcial</small>
+              <small><Badge bg="danger">✗</Badge> Lleno</small>
+              <small><Badge bg="secondary">?</Badge> Sin consultar</small>
+              <small>🎂 Cumpleaños registrado</small>
+            </div>
+          </Alert>
 
-        {/* Renderizar vista seleccionada */}
-        <div className="calendario-container">
-          {vista === 'mes' && renderVistaMes()}
-          {vista === 'semana' && renderVistaSemana()}
-          {vista === 'dia' && renderVistaDia()}
-        </div>
+          {/* ── Vista ── */}
+          {vista === 'mes'    && renderMes()}
+          {vista === 'semana' && renderSemana()}
+          {vista === 'dia'    && renderDia()}
 
-        {/* Detalles de fecha seleccionada */}
-        {renderDetallesFecha()}
-
-        {/* Información adicional */}
-        <Alert variant="info" className="mt-4 mb-0">
-          <h6 className="alert-heading">ℹ️ Información Importante</h6>
-          <small>
-            <ul className="mb-0">
-              <li><strong>Esta consulta NO crea reservas reales</strong> - solo verifica disponibilidad</li>
-              <li>Los datos se actualizan en tiempo real desde el sistema Bookly</li>
-              <li><strong>🎂 Los cumpleaños registrados se muestran en cada día</strong></li>
-              <li>Un turno "Ocupado" significa que ya fue reservado por otro cliente</li>
-              <li>Las fechas pasadas no se pueden consultar</li>
-              <li><strong>Horarios Fin de semana:</strong> 10:30 y 12:20</li>
-              <li><strong>Horarios Entre semana:</strong> 12:30, 14:20 y 16:10</li>
-              <li>Los resultados se guardan en cache por 5 minutos</li>
-            </ul>
-          </small>
-        </Alert>
-      </Card.Body>
-    </Card>
-
+          {/* ── Info ── */}
+          <Alert variant="info" className="mt-4 mb-0">
+            <small>
+              <strong>ℹ️ Importante:</strong>
+              <ul className="mb-0 mt-1">
+                <li>Esta consulta <strong>NO crea reservas</strong> — solo verifica disponibilidad en Bookly</li>
+                <li><strong>Fin de semana:</strong> 10:30 · 12:20 · 14:10 · 16:00 — $28.000</li>
+                <li><strong>Entre semana:</strong> 12:30 · 14:20 · 16:10 — $25.000</li>
+                <li>En vista Mes, hacé clic en un día para ver el detalle de horarios</li>
+              </ul>
+            </small>
+          </Alert>
+        </Card.Body>
+      </Card>
+    </>
   );
 };
 
