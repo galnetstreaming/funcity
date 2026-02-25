@@ -273,6 +273,102 @@ export const obtenerCumpleanosRegistrados = async (fechaInicio, fechaFin) => {
 };
 
 // ============================================================
+//  NORMALIZAR — convierte cualquier formato de la API a objeto
+//  uniforme que usan ListaReservas / HistorialReservas
+// ============================================================
+
+export const normalizeReserva = (raw) => {
+  // Fecha: puede venir como "2026-02-27", "2026-02-27 10:30:00", etc.
+  const fechaRaw = raw.fecha || raw.start_date || raw.date || raw.start || '';
+  const fecha    = fechaRaw ? fechaRaw.split(' ')[0] : '';
+
+  // Hora: puede venir como "10:30:00" o "10:30"
+  const horaRaw    = raw.hora || raw.hora_inicio || raw.time || raw.start_time || '';
+  const hora_inicio = horaRaw ? horaRaw.slice(0, 5) : '';   // "10:30"
+
+  return {
+    bloqueo_id:   raw.bloqueo_id   || raw.id            || null,
+    nombre_ninio: raw.nombre_ninio || raw.nombre         || raw.customer_name || 'Sin nombre',
+    fecha,
+    hora_inicio,
+    personas:     parseInt(raw.personas || raw.number_of_persons || raw.capacity || 1),
+    email:        raw.email        || raw.customer_email || '',
+    telefono:     raw.telefono     || raw.phone          || raw.customer_phone || '',
+    tema:         raw.tema         || raw.notes_tema      || '',
+    notas:        raw.notas        || raw.notes           || '',
+    // Campos originales por si se necesitan
+    _raw: raw,
+  };
+};
+
+// ============================================================
+//  OBTENER TODAS LAS RESERVAS DESDE LA API (rango de fechas)
+// ============================================================
+
+export const obtenerTodasLasReservas = async ({
+  fechaInicio,
+  fechaFin,
+  usarCache = true,
+} = {}) => {
+  // Rango por defecto: 3 meses atrás → 6 meses adelante
+  const hoy  = new Date();
+  const ini  = fechaInicio || (() => {
+    const d = new Date(hoy); d.setMonth(d.getMonth() - 3);
+    return d.toISOString().split('T')[0];
+  })();
+  const fin  = fechaFin || (() => {
+    const d = new Date(hoy); d.setMonth(d.getMonth() + 6);
+    return d.toISOString().split('T')[0];
+  })();
+
+  const cacheKey = `reservas_todas_${ini}_${fin}`;
+
+  // ── Intentar caché (1 min) ──
+  if (usarCache) {
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (Date.now() - c.timestamp < 60 * 1000) {
+          return { reservas: c.reservas, fromCache: true, fechaInicio: ini, fechaFin: fin };
+        }
+      }
+    } catch { /* ignorar */ }
+  }
+
+  // ── Llamada a la API ──
+  const params = new URLSearchParams({
+    api_key:      API_KEY,
+    fecha_inicio: ini,
+    fecha_fin:    fin,
+  });
+
+  const res  = await fetch(`${API_BASE_URL}/obtener-cumpleanos?${params}`, {
+    method:  'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || `Error ${res.status} al obtener reservas`);
+
+  // ── Normalizar array (varios formatos posibles) ──
+  let arr = [];
+  if (Array.isArray(data))              arr = data;
+  else if (Array.isArray(data.cumpleanos)) arr = data.cumpleanos;
+  else if (Array.isArray(data.data))    arr = data.data;
+  else if (Array.isArray(data.reservas)) arr = data.reservas;
+
+  const reservas = arr.map(normalizeReserva).filter(r => r.fecha); // descartar sin fecha
+
+  // ── Guardar en caché ──
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), reservas }));
+  } catch { /* ignorar quota */ }
+
+  return { reservas, fromCache: false, fechaInicio: ini, fechaFin: fin, total: reservas.length };
+};
+
+// ============================================================
 //  ESTADO DE LA API (diagnóstico)
 // ============================================================
 
@@ -302,6 +398,7 @@ export const verificarEstadoAPI = async () => {
 export default {
   consultarDisponibilidad, consultarDisponibilidadReal, consultarDisponibilidadDia, consultarDisponibilidadRango,
   crearReserva, eliminarBloqueo, obtenerCumpleanosRegistrados,
+  obtenerTodasLasReservas, normalizeReserva,
   obtenerHorariosParaFecha, obtenerHorariosDisponibles, esFinDeSemana,
   validarDatosReserva, validarHorarioSegunDia, verificarEstadoAPI,
   HORARIOS_DISPONIBLES, API_BASE_URL, API_KEY,
