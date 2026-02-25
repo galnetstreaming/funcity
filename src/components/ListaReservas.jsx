@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Badge, Alert, Form, InputGroup,
-  Row, Col, Card, Modal, Spinner, Nav, OverlayTrigger, Tooltip
+  Row, Col, Card, Modal, Spinner, Nav, OverlayTrigger, Tooltip,
+  Pagination
 } from 'react-bootstrap';
 import {
   eliminarBloqueo,
@@ -12,11 +13,7 @@ import {
 } from '../services/api';
 
 // ─────────────────────────────────────────────────────────────
-//  ListaReservas
-//
-//  Fuente de datos:
-//   - Tab "Bookly (API)": consulta /obtener-cumpleanos en tiempo real
-//   - Tab "Esta sesión": reservas creadas en la sesión actual (prop)
+//  ListaReservas con PAGINACIÓN
 // ─────────────────────────────────────────────────────────────
 const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
   const [fuente, setFuente]             = useState('api');
@@ -33,13 +30,17 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
   const [ordenCampo, setOrdenCampo]     = useState('fecha');
   const [ordenDir, setOrdenDir]         = useState('asc');
 
+  // --- Paginación ---
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [porPagina, setPorPagina]       = useState(10); // opciones: 10, 25, 50
+
   const [confirmarId, setConfirmarId]   = useState(null);
   const [eliminando, setEliminando]     = useState(null);
   const [mensajeOk, setMensajeOk]       = useState('');
   const [mensajeErr, setMensajeErr]     = useState('');
   const [expandido, setExpandido]       = useState(null);
 
-  // Estado para el ticket a imprimir
+  // Ticket
   const [ticketReserva, setTicketReserva] = useState(null);
   const [mostrarTicket, setMostrarTicket] = useState(false);
 
@@ -90,6 +91,18 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
       return 0;
     });
 
+  // Resetear página cuando cambian filtros o dataset
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda, filtroFecha, filtroMes, fuente, data.length]);
+
+  // ─── Paginación ─────────────────────────────────────────────
+  const totalPaginas = Math.ceil(filtradas.length / porPagina);
+  const inicio = (paginaActual - 1) * porPagina;
+  const fin = inicio + porPagina;
+  const paginadas = filtradas.slice(inicio, fin);
+
+  // ─── Orden ──────────────────────────────────────────────────
   const orden = (campo) => {
     if (ordenCampo === campo) setOrdenDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setOrdenCampo(campo); setOrdenDir('asc'); }
@@ -187,7 +200,6 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
 
   const colorP = (p) => !p ? 'secondary' : p <= 15 ? 'success' : p <= 28 ? 'warning' : 'danger';
 
-  // Limpiar número para WhatsApp (solo dígitos)
   const limpiarTelefono = (tel) => tel?.replace(/\D/g, '') || '';
 
   const limpiar = () => { setBusqueda(''); setFiltroFecha(''); setFiltroMes(''); };
@@ -199,10 +211,46 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
 
   const reservaConfirmar = data.find(x => x.bloqueo_id === confirmarId);
 
+  // ─── Renderizar paginación ───────────────────────────────────
+  const renderPagination = () => {
+    if (totalPaginas <= 1) return null;
+
+    let items = [];
+    const maxBotones = 5; // mostrar hasta 5 números
+    let inicioPag = Math.max(1, paginaActual - Math.floor(maxBotones / 2));
+    let finPag = Math.min(totalPaginas, inicioPag + maxBotones - 1);
+    if (finPag - inicioPag + 1 < maxBotones) {
+      inicioPag = Math.max(1, finPag - maxBotones + 1);
+    }
+
+    // Primera y anterior
+    items.push(
+      <Pagination.First key="first" onClick={() => setPaginaActual(1)} disabled={paginaActual === 1} />,
+      <Pagination.Prev key="prev" onClick={() => setPaginaActual(p => Math.max(1, p-1))} disabled={paginaActual === 1} />
+    );
+
+    // Páginas
+    for (let i = inicioPag; i <= finPag; i++) {
+      items.push(
+        <Pagination.Item key={i} active={i === paginaActual} onClick={() => setPaginaActual(i)}>
+          {i}
+        </Pagination.Item>
+      );
+    }
+
+    // Siguiente y última
+    items.push(
+      <Pagination.Next key="next" onClick={() => setPaginaActual(p => Math.min(totalPaginas, p+1))} disabled={paginaActual === totalPaginas} />,
+      <Pagination.Last key="last" onClick={() => setPaginaActual(totalPaginas)} disabled={paginaActual === totalPaginas} />
+    );
+
+    return <Pagination size="sm">{items}</Pagination>;
+  };
+
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Modal eliminar ── */}
+      {/* Modales: eliminar y ticket (igual que antes) */}
       <Modal show={!!confirmarId} onHide={() => setConfirmarId(null)} centered size="sm">
         <Modal.Header closeButton className="border-0 pb-0">
           <Modal.Title style={{ fontSize: '1rem' }}>⚠️ Confirmar eliminación</Modal.Title>
@@ -224,7 +272,6 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </Modal.Footer>
       </Modal>
 
-      {/* ── Modal ticket ── */}
       <Modal show={mostrarTicket} onHide={() => setMostrarTicket(false)} centered size="lg">
         <Modal.Header closeButton>
           <Modal.Title>🧾 Ticket de reserva</Modal.Title>
@@ -270,11 +317,11 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </Modal.Footer>
       </Modal>
 
-      {/* ── Alertas ── */}
+      {/* Alertas */}
       {mensajeOk  && <Alert variant="success" dismissible onClose={() => setMensajeOk('')} className="py-2">{mensajeOk}</Alert>}
       {mensajeErr && <Alert variant="danger"  dismissible onClose={() => setMensajeErr('')} className="py-2">{mensajeErr}</Alert>}
 
-      {/* ── Source tabs ── */}
+      {/* Tabs de fuente */}
       <div className="lr-tabs-bar">
         <div className="lr-tabs">
           {[
@@ -301,7 +348,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
           ))}
         </div>
 
-        {/* Barra de estado API */}
+        {/* Estado API */}
         {fuente === 'api' && (
           <div className="lr-api-status">
             {cargando ? (
@@ -337,7 +384,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </Alert>
       )}
 
-      {/* ── Cargando (primera carga) ── */}
+      {/* Cargando primera vez */}
       {cargando && reservasAPI.length === 0 && fuente === 'api' && (
         <div className="text-center py-5">
           <Spinner animation="border" variant="primary" />
@@ -345,7 +392,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </div>
       )}
 
-      {/* ── Error ── */}
+      {/* Error */}
       {!cargando && errorAPI && data.length === 0 && (
         <Alert variant="danger" className="text-center py-4">
           <div style={{ fontSize: '2rem' }}>⚠️</div>
@@ -356,10 +403,10 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </Alert>
       )}
 
-      {/* ── Contenido ── */}
+      {/* Contenido principal */}
       {(!cargando || data.length > 0) && !errorAPI && (
         <>
-          {/* Stats */}
+          {/* Stats (igual que antes) */}
           {data.length > 0 && (
             <Row className="mb-3 g-2">
               {[
@@ -381,7 +428,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
             </Row>
           )}
 
-          {/* Filtros */}
+          {/* Filtros (igual) */}
           <Row className="g-2 mb-3">
             <Col md={4}>
               <InputGroup size="sm">
@@ -437,7 +484,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
             </Col>
           </Row>
 
-          {/* Empty */}
+          {/* Sin datos */}
           {data.length === 0 ? (
             <div className="text-center py-5">
               <div style={{ fontSize: '2.5rem' }}>🎈</div>
@@ -456,6 +503,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
             </Alert>
           ) : (
             <>
+              {/* Tabla con datos paginados */}
               <div className="tabla-reservas-wrapper">
                 <Table className="tabla-reservas mb-0" hover>
                   <thead>
@@ -471,7 +519,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtradas.map((r, idx) => {
+                    {paginadas.map((r, idx) => {
                       const key   = r.bloqueo_id || idx;
                       const isExp = expandido === key;
                       const fds   = r.fecha ? esFinDeSemana(r.fecha) : false;
@@ -484,9 +532,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                             onClick={() => setExpandido(isExp ? null : key)}
                             style={{ cursor: 'pointer' }}
                           >
-                            <td>
-                              <span className="badge-id">#{r.bloqueo_id || '—'}</span>
-                            </td>
+                            <td><span className="badge-id">#{r.bloqueo_id || '—'}</span></td>
                             <td>
                               <div className="d-flex align-items-center gap-2">
                                 <div className={`festejado-av ${fds ? 'av-fds' : 'av-sem'}`}>
@@ -506,9 +552,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                                 {fds ? 'Fin de semana' : 'Entre semana'}
                               </Badge>
                             </td>
-                            <td>
-                              <span className="badge-hora">{r.hora_inicio || '—'}</span>
-                            </td>
+                            <td><span className="badge-hora">{r.hora_inicio || '—'}</span></td>
                             <td className="text-center">
                               <Badge bg={colorP(r.personas)} style={{ fontSize: '0.78rem' }}>
                                 {r.personas || '—'}
@@ -612,6 +656,30 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                 </Table>
               </div>
 
+              {/* Controles de paginación */}
+              <div className="d-flex justify-content-between align-items-center mt-3">
+                <div className="d-flex align-items-center gap-2">
+                  <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                    Mostrando {inicio + 1} a {Math.min(fin, filtradas.length)} de {filtradas.length} reservas
+                  </span>
+                  <Form.Select
+                    size="sm"
+                    style={{ width: 'auto' }}
+                    value={porPagina}
+                    onChange={(e) => {
+                      setPorPagina(Number(e.target.value));
+                      setPaginaActual(1);
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </Form.Select>
+                </div>
+                {renderPagination()}
+              </div>
+
+              {/* Pie con totales y actualización */}
               <div className="d-flex justify-content-between align-items-center mt-2 px-1">
                 <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>
                   {hayFiltros ? `${filtradas.length} de ${data.length}` : filtradas.length} reservas · {totalP} personas
