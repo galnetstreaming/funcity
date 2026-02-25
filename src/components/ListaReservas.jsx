@@ -3,7 +3,13 @@ import {
   Table, Button, Badge, Alert, Form, InputGroup,
   Row, Col, Card, Modal, Spinner, Nav, OverlayTrigger, Tooltip
 } from 'react-bootstrap';
-import { eliminarBloqueo, obtenerTodasLasReservas, esFinDeSemana } from '../services/api';
+import {
+  eliminarBloqueo,
+  obtenerTodasLasReservas,
+  esFinDeSemana,
+  PRECIO_SEMANA,
+  PRECIO_FIN_SEMANA
+} from '../services/api';
 
 // ─────────────────────────────────────────────────────────────
 //  ListaReservas
@@ -13,7 +19,6 @@ import { eliminarBloqueo, obtenerTodasLasReservas, esFinDeSemana } from '../serv
 //   - Tab "Esta sesión": reservas creadas en la sesión actual (prop)
 // ─────────────────────────────────────────────────────────────
 const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
-
   const [fuente, setFuente]             = useState('api');
   const [reservasAPI, setReservasAPI]   = useState([]);
   const [cargando, setCargando]         = useState(false);
@@ -33,6 +38,10 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
   const [mensajeOk, setMensajeOk]       = useState('');
   const [mensajeErr, setMensajeErr]     = useState('');
   const [expandido, setExpandido]       = useState(null);
+
+  // Estado para el ticket a imprimir
+  const [ticketReserva, setTicketReserva] = useState(null);
+  const [mostrarTicket, setMostrarTicket] = useState(false);
 
   // ─── Cargar desde API ───────────────────────────────────────
   const cargarDesdeAPI = useCallback(async (forzar = false) => {
@@ -110,6 +119,62 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
     }
   };
 
+  // ─── Ticket ─────────────────────────────────────────────────
+  const abrirTicket = (reserva) => {
+    setTicketReserva(reserva);
+    setMostrarTicket(true);
+  };
+
+  const imprimirTicket = () => {
+    if (!ticketReserva) return;
+    const ventana = window.open('', '_blank');
+    if (!ventana) {
+      alert('Por favor permite ventanas emergentes para imprimir el ticket.');
+      return;
+    }
+    const esFinDeSemanaReserva = esFinDeSemana(ticketReserva.fecha);
+    const precioPorPersona = esFinDeSemanaReserva ? PRECIO_FIN_SEMANA : PRECIO_SEMANA;
+    const total = parseInt(ticketReserva.personas || 0) *
+      parseInt(precioPorPersona.replace(/[^0-9]/g, ''));
+
+    ventana.document.write(`
+      <html>
+        <head>
+          <title>Ticket #${ticketReserva.bloqueo_id || 'Nuevo'}</title>
+          <style>
+            body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 5px; }
+            h2 { text-align: center; font-size: 16px; margin: 5px 0; }
+            hr { border: 1px dashed #000; }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 2px 0; }
+            .total { font-weight: bold; font-size: 14px; }
+            .centrado { text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h2>FUN CITY</h2>
+          <p class="centrado">Ticket de reserva</p>
+          <hr>
+          <table>
+            <tr><td>N° Reserva:</td><td>${ticketReserva.bloqueo_id || '—'}</td></tr>
+            <tr><td>Festejado/a:</td><td>${ticketReserva.nombre_ninio || '—'}</td></tr>
+            <tr><td>Fecha:</td><td>${new Date(ticketReserva.fecha + 'T00:00:00').toLocaleDateString('es-AR')}</td></tr>
+            <tr><td>Hora:</td><td>${ticketReserva.hora_inicio || '—'}</td></tr>
+            <tr><td>Personas:</td><td>${ticketReserva.personas || '—'}</td></tr>
+            <tr><td>Tema:</td><td>${ticketReserva.tema || '—'}</td></tr>
+            <tr><td>Precio x persona:</td><td>${precioPorPersona}</td></tr>
+            <tr><td class="total">TOTAL:</td><td class="total">$${total.toLocaleString()}</td></tr>
+          </table>
+          <hr>
+          <p>Notas: ${ticketReserva.notas || '—'}</p>
+          <p class="centrado">¡Gracias por elegirnos!</p>
+          <script>window.print();window.close();</script>
+        </body>
+      </html>
+    `);
+    ventana.document.close();
+  };
+
   // ─── Helpers ─────────────────────────────────────────────────
   const fmtFecha = (f) => {
     if (!f) return '—';
@@ -121,6 +186,9 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
   };
 
   const colorP = (p) => !p ? 'secondary' : p <= 15 ? 'success' : p <= 28 ? 'warning' : 'danger';
+
+  // Limpiar número para WhatsApp (solo dígitos)
+  const limpiarTelefono = (tel) => tel?.replace(/\D/g, '') || '';
 
   const limpiar = () => { setBusqueda(''); setFiltroFecha(''); setFiltroMes(''); };
   const hayFiltros = !!(busqueda || filtroFecha || filtroMes);
@@ -153,6 +221,52 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         <Modal.Footer className="border-0 pt-0">
           <Button variant="secondary" size="sm" onClick={() => setConfirmarId(null)}>Cancelar</Button>
           <Button variant="danger" size="sm" onClick={handleEliminar}>Sí, eliminar</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ── Modal ticket ── */}
+      <Modal show={mostrarTicket} onHide={() => setMostrarTicket(false)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>🧾 Ticket de reserva</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {ticketReserva && (
+            <div className="ticket-preview p-3" style={{ fontFamily: 'monospace', background: '#f8f9fa' }}>
+              <Row>
+                <Col xs={6}><strong>N° Reserva:</strong> {ticketReserva.bloqueo_id || '—'}</Col>
+                <Col xs={6}><strong>Festejado/a:</strong> {ticketReserva.nombre_ninio}</Col>
+              </Row>
+              <Row className="mt-2">
+                <Col xs={4}><strong>Fecha:</strong> {fmtFecha(ticketReserva.fecha)}</Col>
+                <Col xs={4}><strong>Hora:</strong> {ticketReserva.hora_inicio}</Col>
+                <Col xs={4}><strong>Personas:</strong> {ticketReserva.personas}</Col>
+              </Row>
+              <Row className="mt-2">
+                <Col xs={6}><strong>Tema:</strong> {ticketReserva.tema || '—'}</Col>
+                <Col xs={6}>
+                  <strong>Precio x persona:</strong>{' '}
+                  {esFinDeSemana(ticketReserva.fecha) ? PRECIO_FIN_SEMANA : PRECIO_SEMANA}
+                </Col>
+              </Row>
+              <Row className="mt-2">
+                <Col xs={12}>
+                  <strong>Total:</strong> $
+                  {(parseInt(ticketReserva.personas || 0) *
+                    parseInt((esFinDeSemana(ticketReserva.fecha) ? PRECIO_FIN_SEMANA : PRECIO_SEMANA).replace(/[^0-9]/g, ''))
+                   ).toLocaleString()}
+                </Col>
+              </Row>
+              {ticketReserva.notas && (
+                <Row className="mt-2">
+                  <Col xs={12}><strong>Notas:</strong> {ticketReserva.notas}</Col>
+                </Row>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setMostrarTicket(false)}>Cerrar</Button>
+          <Button variant="primary" onClick={imprimirTicket}>🖨️ Imprimir</Button>
         </Modal.Footer>
       </Modal>
 
@@ -353,7 +467,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                       <th style={{ cursor:'pointer', width: 90, textAlign:'center' }} onClick={() => orden('personas')}>Personas{iconOrden('personas')}</th>
                       <th style={{ cursor:'pointer' }}            onClick={() => orden('tema')}>Tema{iconOrden('tema')}</th>
                       <th>Contacto</th>
-                      <th style={{ width: 90 }}>Acciones</th>
+                      <th style={{ width: 120 }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -361,6 +475,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                       const key   = r.bloqueo_id || idx;
                       const isExp = expandido === key;
                       const fds   = r.fecha ? esFinDeSemana(r.fecha) : false;
+                      const telefonoLimpio = limpiarTelefono(r.telefono);
                       return (
                         <>
                           <tr
@@ -405,9 +520,24 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                             <td>
                               <div style={{ fontSize: '0.77rem', lineHeight: 1.5 }}>
                                 {r.email && r.email !== 'bloqueo@funcity.com.ar' && (
-                                  <div className="text-truncate" style={{ maxWidth: 160 }} title={r.email}>📧 {r.email}</div>
+                                  <div className="text-truncate" style={{ maxWidth: 160 }} title={r.email}>
+                                    📧 {r.email}
+                                  </div>
                                 )}
-                                {r.telefono && <div>📱 {r.telefono}</div>}
+                                {r.telefono && (
+                                  <div>
+                                    📱{' '}
+                                    <a
+                                      href={`https://wa.me/${telefonoLimpio}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ textDecoration: 'none', color: '#25D366' }}
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      {r.telefono}
+                                    </a>
+                                  </div>
+                                )}
                                 {!r.email && !r.telefono && <span className="text-muted">—</span>}
                               </div>
                             </td>
@@ -426,6 +556,12 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                                     {eliminando === r.bloqueo_id ? <Spinner animation="border" size="sm" /> : '🗑️'}
                                   </Button>
                                 </OverlayTrigger>
+                                <OverlayTrigger placement="top" overlay={<Tooltip>Imprimir ticket</Tooltip>}>
+                                  <Button variant="outline-info" size="sm" className="btn-acc"
+                                    onClick={() => abrirTicket(r)}>
+                                    🖨️
+                                  </Button>
+                                </OverlayTrigger>
                               </div>
                             </td>
                           </tr>
@@ -442,7 +578,19 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                                       { label: '👥 Personas',       value: r.personas                      },
                                       { label: '🎨 Tema',           value: r.tema || '—'                   },
                                       { label: '📧 Email',          value: (r.email && r.email !== 'bloqueo@funcity.com.ar') ? r.email : '—' },
-                                      { label: '📱 Teléfono',       value: r.telefono || '—'               },
+                                      {
+                                        label: '📱 Teléfono',
+                                        value: r.telefono ? (
+                                          <a
+                                            href={`https://wa.me/${limpiarTelefono(r.telefono)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ textDecoration: 'none', color: '#25D366' }}
+                                          >
+                                            {r.telefono}
+                                          </a>
+                                        ) : '—'
+                                      },
                                       { label: '📝 Notas',          value: r.notas || '—'                  },
                                     ].map(d => (
                                       <Col xs={6} md={3} key={d.label}>
