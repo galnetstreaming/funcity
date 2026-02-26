@@ -64,6 +64,7 @@ const ZabbixNavBar = ({
       icon: <Calendar3 size={16} className="me-2" />,
       description: 'Consultar disponibilidad de horarios',
     },
+    /*
     {
       id: 'historial',
       title: 'Historial',
@@ -71,6 +72,7 @@ const ZabbixNavBar = ({
       description: 'Historial de reservas creadas en esta sesión',
       badge: reservasCount,
     },
+    */
   ];
 
   const secondaryItems = [
@@ -102,7 +104,7 @@ const ZabbixNavBar = ({
               <ClipboardCheck size={20} />
             </div>
             <div>
-              <div className="brand-name">Fun City Kids Café</div>
+              <div className="brand-name">Cumpleaños</div>
               <div className="brand-sub">Sistema de Reservas</div>
             </div>
           </Navbar.Brand>

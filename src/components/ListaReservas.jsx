@@ -32,7 +32,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
 
   // --- Paginación ---
   const [paginaActual, setPaginaActual] = useState(1);
-  const [porPagina, setPorPagina]       = useState(10); // opciones: 10, 25, 50
+  const [porPagina, setPorPagina]       = useState(20); // opciones: 10, 25, 50
 
   const [confirmarId, setConfirmarId]   = useState(null);
   const [eliminando, setEliminando]     = useState(null);
@@ -165,7 +165,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
           </style>
         </head>
         <body>
-          <h2>FUN CITY</h2>
+          <h2>TICKET DE CUMPLEAÑOS</h2>
           <p class="centrado">Ticket de reserva</p>
           <hr>
           <table>
@@ -216,7 +216,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
     if (totalPaginas <= 1) return null;
 
     let items = [];
-    const maxBotones = 5; // mostrar hasta 5 números
+    const maxBotones = 20; // mostrar hasta 20 números
     let inicioPag = Math.max(1, paginaActual - Math.floor(maxBotones / 2));
     let finPag = Math.min(totalPaginas, inicioPag + maxBotones - 1);
     if (finPag - inicioPag + 1 < maxBotones) {
