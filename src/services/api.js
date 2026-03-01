@@ -2,8 +2,8 @@
 //  Fun City — Bookly Sync API Service
 // ============================================================
 
-const API_BASE_URL = 'https://testsite.funcity.com.ar/wp-json/bookly-sync/v1';
-const API_KEY      = 'fcBk2025!x9kM7pQ2vR8tW3zY5uN1jL4hG6eD9aS0rT';
+export const API_BASE_URL = 'https://testsite.funcity.com.ar/wp-json/bookly-sync/v1';
+export const API_KEY      = 'fcBk2025!x9kM7pQ2vR8tW3zY5uN1jL4hG6eD9aS0rT';
 
 // ─── Horarios por tipo de día ────────────────────────────────
 export const HORARIOS_DISPONIBLES = {
@@ -189,17 +189,25 @@ export const crearReserva = async (datosReserva) => {
   const valHorario = validarHorarioSegunDia(datosReserva.fecha, datosReserva.hora_inicio);
   if (!valHorario.valido) throw new Error(valHorario.mensaje);
 
+  // Construir nota incluyendo contacto del cliente
+  const parteContacto = [datosReserva.nombre_cliente, datosReserva.apellido_cliente]
+    .filter(Boolean).join(' ');
+  const notaFinal = [
+    parteContacto ? `Contacto: ${parteContacto}` : '',
+    datosReserva.notas?.trim() || '',
+  ].filter(Boolean).join(' | ') || undefined;
+
   const payload = {
-    api_key: API_KEY,
-    fecha: datosReserva.fecha,
-    hora_inicio: datosReserva.hora_inicio,
-    personas: parseInt(datosReserva.personas),
-    modo: 'crear',
+    api_key:      API_KEY,
+    fecha:        datosReserva.fecha,
+    hora_inicio:  datosReserva.hora_inicio,
+    personas:     parseInt(datosReserva.personas),
+    modo:         'crear',
     nombre_ninio: datosReserva.nombre_ninio || 'Sin nombre',
-    tema: datosReserva.tema || 'Sin tema',
-    email: datosReserva.email || 'consulta@funcity.com.ar',
+    tema:         datosReserva.tema || 'Sin tema',
+    email:        datosReserva.email || 'consulta@funcity.com.ar',
     ...(datosReserva.telefono && { telefono: datosReserva.telefono }),
-    ...(datosReserva.notas   && { notas: datosReserva.notas }),
+    ...(notaFinal              && { notas: notaFinal }),
   };
 
   const res = await fetch(`${API_BASE_URL}/bloquear-pase`, {
@@ -218,14 +226,17 @@ export const crearReserva = async (datosReserva) => {
   return {
     ...data,
     // Datos del form enriquecidos para guardar localmente
-    nombre_ninio: datosReserva.nombre_ninio,
-    fecha:        datosReserva.fecha,
-    hora_inicio:  datosReserva.hora_inicio,
-    personas:     parseInt(datosReserva.personas),
-    email:        datosReserva.email || 'bloqueo@funcity.com.ar',
-    telefono:     datosReserva.telefono || '',
-    tema:         datosReserva.tema || '',
-    notas:        datosReserva.notas || '',
+    nombre_ninio:     datosReserva.nombre_ninio,
+    fecha:            datosReserva.fecha,
+    hora_inicio:      datosReserva.hora_inicio,
+    personas:         parseInt(datosReserva.personas),
+    email:            datosReserva.email || 'bloqueo@funcity.com.ar',
+    telefono:         datosReserva.telefono || '',
+    tema:             datosReserva.tema || '',
+    notas:            datosReserva.notas || '',
+    // Contacto del cliente (no va a la API de Bookly, se guarda localmente)
+    nombre_cliente:   datosReserva.nombre_cliente   || '',
+    apellido_cliente: datosReserva.apellido_cliente || '',
   };
 };
 
@@ -248,28 +259,25 @@ export const eliminarBloqueo = async (bloqueoId) => {
 //  RESERVAS — OBTENER (lista de cumpleaños/bloqueos)
 // ============================================================
 
+// ─── Caché en memoria (se vacía al recargar la página) ───────
+const _memoriaCache = {};
+
 export const obtenerCumpleanosRegistrados = async (fechaInicio, fechaFin) => {
   const cacheKey = `cumpleanos_${fechaInicio}_${fechaFin}`;
-  try {
-    const cache = localStorage.getItem(cacheKey);
-    if (cache) {
-      const c = JSON.parse(cache);
-      if (Date.now() - c.timestamp < 5 * 60 * 1000) return c.data;
-    }
-    const params = new URLSearchParams({ api_key: API_KEY, fecha_inicio: fechaInicio, fecha_fin: fechaFin });
-    const res = await fetch(`${API_BASE_URL}/obtener-cumpleanos?${params}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
-    localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data }));
-    return data;
-  } catch (err) {
-    const cache = localStorage.getItem(cacheKey);
-    if (cache) return JSON.parse(cache).data;
-    throw err;
+  // Caché en memoria: 5 minutos
+  if (_memoriaCache[cacheKey]) {
+    const c = _memoriaCache[cacheKey];
+    if (Date.now() - c.timestamp < 5 * 60 * 1000) return c.data;
   }
+  const params = new URLSearchParams({ api_key: API_KEY, fecha_inicio: fechaInicio, fecha_fin: fechaFin });
+  const res = await fetch(`${API_BASE_URL}/obtener-cumpleanos?${params}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
+  _memoriaCache[cacheKey] = { timestamp: Date.now(), data };
+  return data;
 };
 
 // ============================================================
@@ -287,15 +295,18 @@ export const normalizeReserva = (raw) => {
   const hora_inicio = horaRaw ? horaRaw.slice(0, 5) : '';   // "10:30"
 
   return {
-    bloqueo_id:   raw.bloqueo_id   || raw.id            || null,
-    nombre_ninio: raw.nombre_ninio || raw.nombre         || raw.customer_name || 'Sin nombre',
+    bloqueo_id:       raw.bloqueo_id       || raw.id            || null,
+    nombre_ninio:     raw.nombre_ninio     || raw.nombre        || raw.customer_name || 'Sin nombre',
     fecha,
     hora_inicio,
-    personas:     parseInt(raw.personas || raw.number_of_persons || raw.capacity || 1),
-    email:        raw.email        || raw.customer_email || '',
-    telefono:     raw.telefono     || raw.phone          || raw.customer_phone || '',
-    tema:         raw.tema         || raw.notes_tema      || '',
-    notas:        raw.notas        || raw.notes           || '',
+    personas:         parseInt(raw.personas || raw.number_of_persons || raw.capacity || 1),
+    email:            raw.email            || raw.customer_email || '',
+    telefono:         raw.telefono         || raw.phone         || raw.customer_phone || '',
+    tema:             raw.tema             || raw.notes_tema     || '',
+    notas:            raw.notas            || raw.notes          || '',
+    // Contacto del cliente (campos propios del sistema, no de Bookly)
+    nombre_cliente:   raw.nombre_cliente   || '',
+    apellido_cliente: raw.apellido_cliente || '',
     // Campos originales por si se necesitan
     _raw: raw,
   };
@@ -321,19 +332,14 @@ export const obtenerTodasLasReservas = async ({
     return d.toISOString().split('T')[0];
   })();
 
-  const cacheKey = `reservas_todas_${ini}_${fin}`;
+  const cacheKey = `reservas_${ini}_${fin}`;
 
-  // ── Intentar caché (1 min) ──
-  if (usarCache) {
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const c = JSON.parse(raw);
-        if (Date.now() - c.timestamp < 60 * 1000) {
-          return { reservas: c.reservas, fromCache: true, fechaInicio: ini, fechaFin: fin };
-        }
-      }
-    } catch { /* ignorar */ }
+  // ── Caché en memoria (1 min) ──
+  if (usarCache && _memoriaCache[cacheKey]) {
+    const c = _memoriaCache[cacheKey];
+    if (Date.now() - c.timestamp < 60 * 1000) {
+      return { reservas: c.reservas, fromCache: true, fechaInicio: ini, fechaFin: fin };
+    }
   }
 
   // ── Llamada a la API ──
@@ -358,12 +364,10 @@ export const obtenerTodasLasReservas = async ({
   else if (Array.isArray(data.data))    arr = data.data;
   else if (Array.isArray(data.reservas)) arr = data.reservas;
 
-  const reservas = arr.map(normalizeReserva).filter(r => r.fecha); // descartar sin fecha
+  const reservas = arr.map(normalizeReserva).filter(r => r.fecha);
 
-  // ── Guardar en caché ──
-  try {
-    localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), reservas }));
-  } catch { /* ignorar quota */ }
+  // ── Guardar en caché en memoria ──
+  _memoriaCache[cacheKey] = { timestamp: Date.now(), reservas };
 
   return { reservas, fromCache: false, fechaInicio: ini, fechaFin: fin, total: reservas.length };
 };
@@ -395,11 +399,140 @@ export const verificarEstadoAPI = async () => {
   return { endpoints: resultados, resumen: { total: resultados.length, disponibles: resultados.filter(r => r.disponible).length } };
 };
 
+// ============================================================
+//  FERIADOS NACIONALES — API pública ArgentinaDatos
+//  Endpoint: GET https://api.argentinadatos.com/v1/feriados/{año}
+//  Sin autenticación · Respuesta: [{fecha, nombre, tipo}]
+// ============================================================
+const FERIADOS_API = 'https://api.argentinadatos.com/v1/feriados';
+
+export const obtenerFeriados = async (año) => {
+  const key = `feriados_${año}`;
+  if (_memoriaCache[key]) return _memoriaCache[key];
+  try {
+    const res  = await fetch(`${FERIADOS_API}/${año}`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const data = await res.json();
+    const mapa = {};
+    (Array.isArray(data) ? data : []).forEach(f => {
+      if (f.fecha) mapa[f.fecha] = { nombre: f.nombre || 'Feriado', tipo: f.tipo || 'inamovible' };
+    });
+    _memoriaCache[key] = mapa;
+    return mapa;
+  } catch (err) {
+    console.warn(`No se pudieron cargar feriados ${año}:`, err.message);
+    return {};
+  }
+};
+
+export const obtenerFeriadosRango = async (añoInicio, añoFin) => {
+  const años = [];
+  for (let a = añoInicio; a <= añoFin; a++) años.push(a);
+  const resultados = await Promise.all(años.map(a => obtenerFeriados(a)));
+  return Object.assign({}, ...resultados);
+};
+
+// ============================================================
+//  COBROS — CRUD contra la API de WordPress
+//  Endpoint base: /wp-json/bookly-sync/v1/cobros
+//
+//  El backend almacena un registro de cobro por reserva:
+//  {
+//    bloqueo_id: string,
+//    estado:     'sinCobro' | 'adelanto' | 'pagado' | 'cancelado',
+//    total:      number,
+//    pagos:      [{ id, monto, metodo, tipo, nota, creadoEn }],
+//    notas:      string,
+//    actualizadoEn: ISO string
+//  }
+//
+//  Si el endpoint no está disponible (404/500) los métodos
+//  devuelven null o [] sin lanzar excepción, para que el
+//  componente pueda degradar graciosamente.
+// ============================================================
+
+const COBROS_ENDPOINT = `${API_BASE_URL}/cobros`;
+
+// ── Obtener cobro de UNA reserva ──────────────────────────────
+export const obtenerCobro = async (bloqueoId) => {
+  try {
+    const params = new URLSearchParams({ api_key: API_KEY, bloqueo_id: bloqueoId });
+    const res = await fetch(`${COBROS_ENDPOINT}?${params}`);
+    if (res.status === 404) return null;          // no existe aún → cobroVacio
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.cobro ?? data ?? null;
+  } catch {
+    return null;
+  }
+};
+
+// ── Obtener cobros de TODAS las reservas de una sesión ────────
+// Devuelve { [bloqueo_id]: cobroObj, ... }
+export const obtenerTodosCobros = async (bloqueoIds = []) => {
+  if (!bloqueoIds.length) return {};
+  try {
+    const params = new URLSearchParams({ api_key: API_KEY });
+    bloqueoIds.forEach(id => params.append('ids[]', id));
+    const res = await fetch(`${COBROS_ENDPOINT}/batch?${params}`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    // Normalizar: puede venir como array o como mapa
+    if (Array.isArray(data)) {
+      return data.reduce((acc, c) => {
+        if (c.bloqueo_id) acc[String(c.bloqueo_id)] = c;
+        return acc;
+      }, {});
+    }
+    return data?.cobros ?? data ?? {};
+  } catch {
+    return {};
+  }
+};
+
+// ── Guardar / actualizar cobro completo ───────────────────────
+export const guardarCobro = async (bloqueoId, cobro) => {
+  try {
+    const res = await fetch(COBROS_ENDPOINT, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key:   API_KEY,
+        bloqueo_id: String(bloqueoId),
+        ...cobro,
+        actualizadoEn: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.cobro ?? cobro;
+  } catch {
+    return null;
+  }
+};
+
+// ── Eliminar cobro (por si se borra la reserva) ───────────────
+export const eliminarCobro = async (bloqueoId) => {
+  try {
+    const res = await fetch(COBROS_ENDPOINT, {
+      method:  'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: API_KEY, bloqueo_id: String(bloqueoId) }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
 export default {
   consultarDisponibilidad, consultarDisponibilidadReal, consultarDisponibilidadDia, consultarDisponibilidadRango,
   crearReserva, eliminarBloqueo, obtenerCumpleanosRegistrados,
   obtenerTodasLasReservas, normalizeReserva,
   obtenerHorariosParaFecha, obtenerHorariosDisponibles, esFinDeSemana,
   validarDatosReserva, validarHorarioSegunDia, verificarEstadoAPI,
-  HORARIOS_DISPONIBLES, API_BASE_URL, API_KEY,
+  obtenerFeriados, obtenerFeriadosRango,
+  obtenerCobro, obtenerTodosCobros, guardarCobro, eliminarCobro,
+  HORARIOS_DISPONIBLES, PRECIO_SEMANA, PRECIO_FIN_SEMANA,
+  API_BASE_URL, API_KEY,
 };

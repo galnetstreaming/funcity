@@ -15,7 +15,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 //  ListaReservas con PAGINACIÓN
 // ─────────────────────────────────────────────────────────────
-const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
+const ListaReservas = ({ reservas = [], onEditar, onActualizar, onIrAHistorial }) => {
   const [fuente, setFuente]             = useState('api');
   const [reservasAPI, setReservasAPI]   = useState([]);
   const [cargando, setCargando]         = useState(false);
@@ -166,11 +166,15 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
         </head>
         <body>
           <h2>TICKET DE CUMPLEAÑOS</h2>
-          <p class="centrado">Ticket de reserva</p>
+          <p class="centrado">Fun City — Ticket de reserva</p>
           <hr>
           <table>
             <tr><td>N° Reserva:</td><td>${ticketReserva.bloqueo_id || '—'}</td></tr>
             <tr><td>Festejado/a:</td><td>${ticketReserva.nombre_ninio || '—'}</td></tr>
+            ${(ticketReserva.nombre_cliente || ticketReserva.apellido_cliente)
+              ? `<tr><td>Contacto:</td><td>${[ticketReserva.nombre_cliente, ticketReserva.apellido_cliente].filter(Boolean).join(' ')}</td></tr>`
+              : ''}
+            ${ticketReserva.telefono ? `<tr><td>Teléfono:</td><td>${ticketReserva.telefono}</td></tr>` : ''}
             <tr><td>Fecha:</td><td>${new Date(ticketReserva.fecha + 'T00:00:00').toLocaleDateString('es-AR')}</td></tr>
             <tr><td>Hora:</td><td>${ticketReserva.hora_inicio || '—'}</td></tr>
             <tr><td>Personas:</td><td>${ticketReserva.personas || '—'}</td></tr>
@@ -180,7 +184,7 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
           </table>
           <hr>
           <p>Notas: ${ticketReserva.notas || '—'}</p>
-          <p class="centrado">¡Gracias por elegirnos!</p>
+          <p class="centrado">¡Gracias por elegirnos! 🎉</p>
           <script>window.print();window.close();</script>
         </body>
       </html>
@@ -283,6 +287,15 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                 <Col xs={6}><strong>N° Reserva:</strong> {ticketReserva.bloqueo_id || '—'}</Col>
                 <Col xs={6}><strong>Festejado/a:</strong> {ticketReserva.nombre_ninio}</Col>
               </Row>
+              {(ticketReserva.nombre_cliente || ticketReserva.apellido_cliente) && (
+                <Row className="mt-2">
+                  <Col xs={12}>
+                    <strong>Contacto:</strong>{' '}
+                    {[ticketReserva.nombre_cliente, ticketReserva.apellido_cliente].filter(Boolean).join(' ')}
+                    {ticketReserva.telefono && <> · 📱 {ticketReserva.telefono}</>}
+                  </Col>
+                </Row>
+              )}
               <Row className="mt-2">
                 <Col xs={4}><strong>Fecha:</strong> {fmtFecha(ticketReserva.fecha)}</Col>
                 <Col xs={4}><strong>Hora:</strong> {ticketReserva.hora_inicio}</Col>
@@ -600,6 +613,12 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                                     {eliminando === r.bloqueo_id ? <Spinner animation="border" size="sm" /> : '🗑️'}
                                   </Button>
                                 </OverlayTrigger>
+                                <OverlayTrigger placement="top" overlay={<Tooltip>Gestionar cobro</Tooltip>}>
+                                  <Button variant="outline-success" size="sm" className="btn-acc"
+                                    onClick={() => onIrAHistorial && onIrAHistorial(r)}>
+                                    💳
+                                  </Button>
+                                </OverlayTrigger>
                                 <OverlayTrigger placement="top" overlay={<Tooltip>Imprimir ticket</Tooltip>}>
                                   <Button variant="outline-info" size="sm" className="btn-acc"
                                     onClick={() => abrirTicket(r)}>
@@ -617,6 +636,8 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar }) => {
                                   <Row className="g-3">
                                     {[
                                       { label: '🆔 ID Bookly',     value: <code>#{r.bloqueo_id}</code>      },
+                                      { label: '🎂 Festejado/a',   value: r.nombre_ninio || '—'             },
+                                      { label: '👤 Contacto',      value: [r.nombre_cliente, r.apellido_cliente].filter(Boolean).join(' ') || '—' },
                                       { label: '📅 Fecha',          value: fmtFecha(r.fecha)                },
                                       { label: '🕐 Hora',           value: r.hora_inicio                    },
                                       { label: '👥 Personas',       value: r.personas                      },
