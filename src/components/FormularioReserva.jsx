@@ -1,12 +1,6 @@
-// ============================================================
-//  FormularioReserva — Nueva reserva / Edición
-//  v2.1: Corrección de legibilidad (textos oscuros sobre fondos claros)
-// ============================================================
 
 import { useState, useEffect, useRef } from 'react';
-import {
-  Form, Button, Row, Col, Alert, Card, Badge, ButtonGroup, Spinner,
-} from 'react-bootstrap';
+import { Form, Button, Row, Col, Alert, Card, Badge, ButtonGroup, Spinner } from 'react-bootstrap';
 import {
   crearReserva,
   eliminarBloqueo,
@@ -17,10 +11,10 @@ import {
   obtenerConfiguracion,
   CONFIG_DEFAULT,
 } from '../services/api';
-import { useAuth }     from '../AuthContext';
-
+import { useAuth } from '../AuthContext';
+import { useUserRole } from '../hooks/useUserRole';   // ← Única importación del hook
 import './FormularioReserva.css';
-import { useUserRole } from '../hooks/useUserRole';
+
 
 // ─── Temas populares ──────────────────────────────────────────
 const TEMAS_POPULARES = [
