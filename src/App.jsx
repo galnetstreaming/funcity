@@ -8,6 +8,7 @@ import './App.css';
 
 import { RoleProvider } from "./hooks/useUserRole";
 const AppContent = () => {
+  
   const { currentUser, loading } = useAuth();
 
   if (loading)      return <LoadingSpinner />;
