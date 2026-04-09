@@ -22,7 +22,7 @@ import {
   API_KEY,
   verificarEstadoAPI,
 } from '../services/api';
-import { useUserRole } from "../hooks/useUserRole";
+//import { useUserRole } from "../hooks/useUserRole";
 
 import CajaDelDia from './CajaDelDia';
 

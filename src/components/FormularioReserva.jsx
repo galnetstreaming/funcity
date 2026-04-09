@@ -12,7 +12,7 @@ import {
   CONFIG_DEFAULT,
 } from '../services/api';
 import { useAuth } from '../AuthContext';
-import { useUserRole } from '../hooks/useUserRole';   // ← Única importación del hook
+//import { useUserRole } from '../hooks/useUserRole';   // ← Única importación del hook
 import './FormularioReserva.css';
 
 
@@ -48,7 +48,7 @@ const FormularioReserva = ({
   onCancelarEdicion,
 }) => {
   const { currentUser }  = useAuth();
-  const { isCajero }     = useUserRole();
+ // const { isCajero }     = useUserRole();
 
   const [formData,    setFormData]    = useState(FORM_VACIO);
   const [errores,     setErrores]     = useState({});
@@ -266,7 +266,7 @@ const FormularioReserva = ({
   // ── Formulario principal ──────────────────────────────────
   return (
     <>
-      {/* Banner cajero */}
+      {/* Banner cajero 
       {isCajero && (
         <Alert variant="info" className="py-2 mb-3">
           <small>
@@ -274,7 +274,7 @@ const FormularioReserva = ({
             Para modificar precios o eliminar reservas, contactá a un administrador.
           </small>
         </Alert>
-      )}
+      )}*/}
 
       {cargandoConf && (
         <Alert variant="light" className="py-2 mb-3">

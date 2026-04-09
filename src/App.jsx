@@ -6,7 +6,7 @@ import Admin from './Admin';
 import './App.css';
 
 
-import { RoleProvider } from './hooks/useUserRole';
+
 
 const AppContent = () => {
 
@@ -21,9 +21,9 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <RoleProvider>
+
         <AppContent />
-      </RoleProvider>
+
     </AuthProvider>
   );
 }
