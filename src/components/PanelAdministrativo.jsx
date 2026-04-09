@@ -22,8 +22,10 @@ import {
   API_KEY,
   verificarEstadoAPI,
 } from '../services/api';
-import { useUserRole } from '../hooks/UseUserRole';
+import { useUserRole } from "../hooks/useUserRole";
+
 import CajaDelDia from './CajaDelDia';
+
 
 // ── Helpers ───────────────────────────────────────────────────
 const hoy    = () => new Date().toISOString().split('T')[0];
