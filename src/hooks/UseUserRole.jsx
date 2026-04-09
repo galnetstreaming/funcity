@@ -26,7 +26,6 @@ export const RoleProvider = ({ children }) => {
   const [rolesConfig,    setRolesConfig]    = useState({ adminEmails: ADMIN_EMAILS_DEFAULT });
   const [cargandoConfig, setCargandoConfig] = useState(true);
 
-  // ── Al montar: cargar config de roles desde la API ────────
   useEffect(() => {
     const cargarConfig = async () => {
       setCargandoConfig(true);
@@ -44,13 +43,11 @@ export const RoleProvider = ({ children }) => {
     cargarConfig();
   }, []);
 
-  // ── Guardar nueva config de roles en la API ───────────────
   const actualizarRoles = useCallback(async (nuevaConfig) => {
     setRolesConfig(nuevaConfig);
     await guardarConfiguracion({ admin_emails: nuevaConfig.adminEmails });
   }, []);
 
-  // ── Determinar rol del usuario actual ─────────────────────
   const getRole = useCallback((email) => {
     if (!email) return null;
     if (rolesConfig.adminEmails.includes(email.toLowerCase())) return ROLES.ADMIN;
@@ -70,7 +67,6 @@ export const RoleProvider = ({ children }) => {
     actualizarRoles,
     getRole,
     ROLES,
-    // Permisos granulares
     canDelete:        isAdmin,
     canEditPrices:    isAdmin,
     canViewSettings:  isAdmin,
@@ -83,8 +79,8 @@ export const RoleProvider = ({ children }) => {
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 };
-
-// ── Hook de consumo ───────────────────────────────────────────
+  
+// ── Hook de consumo (CORREGIDO: minúscula) ─────────────────────
 export const useUserRole = () => {
   const context = useContext(RoleContext);
   if (!context) {
@@ -111,4 +107,4 @@ export const useUserRole = () => {
   return context;
 };
 
-export default useUserRole;
+export default useUserRole;  // ← Cambiado a minúscula

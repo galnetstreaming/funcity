@@ -20,7 +20,7 @@ import {
 import { useAuth }     from '../AuthContext';
 
 import './FormularioReserva.css';
-import { useUserRole } from "../hooks/useUserRole";
+import { useUserRole } from '../hooks/useUserRole';
 
 // ─── Temas populares ──────────────────────────────────────────
 const TEMAS_POPULARES = [
@@ -29,6 +29,8 @@ const TEMAS_POPULARES = [
   '🦄 Unicornios',  '🏴‍☠️ Piratas',    '❄️ Frozen',       '🕷️ Spider-Man',
   '🚗 Cars',        '🧱 Minecraft',    '🪄 Harry Potter', '🐾 Paw Patrol',
 ];
+
+
 
 const FORM_VACIO = {
   nombre_ninio:     '',
