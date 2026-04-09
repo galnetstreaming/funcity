@@ -4,6 +4,7 @@ import Login from './Login';
 import LoadingSpinner from './LoadingSpinner';
 import Admin from './Admin';
 import './App.css';
+import { RoleProvider } from './hooks/useUserRole';
 
 const AppContent = () => {
   const { currentUser, loading } = useAuth();
@@ -17,7 +18,9 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <RoleProvider>
+        <AppContent />
+      </RoleProvider>
     </AuthProvider>
   );
 }

@@ -6,7 +6,7 @@ import {
 import {
   ClipboardCheck, Gear, List, PersonCircle,
   BoxArrowRight, Calendar3, PlusCircle,
-  Table, ClockHistory
+  Table, ClockHistory, CashStack
 } from 'react-bootstrap-icons';
 import { useAuth } from '../AuthContext';
 import PropTypes from 'prop-types';
@@ -19,8 +19,8 @@ const ZabbixNavBar = ({
   reservasCount = 0,
 }) => {
   const [showOffcanvas, setShowOffcanvas] = useState(false);
-  const [scrolled, setScrolled]           = useState(false);
-  const { currentUser, logout }           = useAuth();
+  const [scrolled, setScrolled] = useState(false);
+  const { currentUser, logout } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -63,6 +63,12 @@ const ZabbixNavBar = ({
       title: 'Disponibilidad',
       icon: <Calendar3 size={16} className="me-2" />,
       description: 'Consultar disponibilidad de horarios',
+    },
+    {
+      id: 'caja',
+      title: 'Caja del Día',
+      icon: <CashStack size={16} className="me-2" />,
+      description: 'Resumen de ventas del día',
     },
     /*
     {
@@ -284,9 +290,9 @@ const ZabbixNavBar = ({
 
 ZabbixNavBar.propTypes = {
   onSelectComponent: PropTypes.func.isRequired,
-  activeComponent:   PropTypes.string,
-  eventCount:        PropTypes.number,
-  reservasCount:     PropTypes.number,
+  activeComponent: PropTypes.string,
+  eventCount: PropTypes.number,
+  reservasCount: PropTypes.number,
 };
 
 export default ZabbixNavBar;

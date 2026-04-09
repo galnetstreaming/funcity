@@ -415,3 +415,12 @@ html {
     page-break-inside: avoid;
   }
 }
+
+/* Forzar fondo claro y texto oscuro dentro del formulario */
+.formulario-reserva .card,
+.formulario-reserva .card-body,
+.formulario-reserva .form-control,
+.formulario-reserva .form-label {
+  background-color: #fff !important;
+  color: #212529 !important;
+}

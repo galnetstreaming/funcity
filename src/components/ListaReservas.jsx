@@ -11,6 +11,7 @@ import {
   PRECIO_SEMANA,
   PRECIO_FIN_SEMANA
 } from '../services/api';
+import { useUserRole } from '../hooks/UseUserRole';
 
 // ─────────────────────────────────────────────────────────────
 //  ListaReservas con PAGINACIÓN
@@ -44,6 +45,9 @@ const ListaReservas = ({ reservas = [], onEditar, onActualizar, onIrAHistorial }
   const [ticketReserva, setTicketReserva] = useState(null);
   const [mostrarTicket, setMostrarTicket] = useState(false);
 
+// Roles
+  const { canDelete, isAdmin } = useUserRole();
+  
   // ─── Cargar desde API ───────────────────────────────────────
   const cargarDesdeAPI = useCallback(async (forzar = false) => {
     setCargando(true);
