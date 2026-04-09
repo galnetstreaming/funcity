@@ -35,11 +35,11 @@ const Login = () => {
         <Col xxl={4} lg={6} md={8} className="p-4 bg-white rounded-4 shadow-lg">
           <div className="w-100" style={{ maxWidth: '400px', margin: '0 auto' }}>
             <div className="text-center mb-4">
-              {/* Logo profesional 
+              {/* Logo profesional  */}
               <div className="mb-4 d-flex justify-content-center align-items-center">
                 <Image 
-                  src="/Logo_principal.webp" 
-                  alt="Logo EUN CIFTA AIDS CAFE"
+                  src="/playfan.png" 
+                  alt="PLAY FAN Logo"
                   fluid
                   className="mb-3"
                   style={{ 
@@ -49,7 +49,7 @@ const Login = () => {
                   }}
                 />
               </div>
-              */}
+             
               
               <h1 className="h3 mb-1 fw-bold text-dark">Bienvenidos</h1>
               <p className="text-muted mb-0">Ingresa tus credenciales para continuar</p>
